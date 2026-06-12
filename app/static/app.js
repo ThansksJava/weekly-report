@@ -165,7 +165,12 @@ function refreshListActive() {
 
 $("#btn-new-report").addEventListener("click", async () => {
   if (dirty && current) await saveReport();
-  current = await api("/api/reports", { method: "POST" });
+  try {
+    current = await api("/api/reports", { method: "POST" });
+  } catch (e) {
+    toast(e.message);
+    return;
+  }
   await refreshList();
   renderReport();
   refreshListActive();

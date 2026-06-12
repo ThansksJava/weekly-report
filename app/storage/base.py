@@ -10,6 +10,10 @@ from abc import ABC, abstractmethod
 from ..models import Report, User
 
 
+class DuplicateWeekError(Exception):
+    """同一用户的同一周(week_start)已存在周报。由 create_report 抛出。"""
+
+
 class Storage(ABC):
     # ---- 用户 ----
     @abstractmethod
@@ -26,7 +30,9 @@ class Storage(ABC):
 
     # ---- 周报 ----
     @abstractmethod
-    def create_report(self, report: Report) -> Report: ...
+    def create_report(self, report: Report) -> Report:
+        """新增周报。若同一用户已有相同 week_start 的周报,抛出 DuplicateWeekError。"""
+        ...
 
     @abstractmethod
     def get_report(self, report_id: str) -> Report | None: ...

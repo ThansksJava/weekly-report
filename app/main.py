@@ -18,7 +18,7 @@ from .auth import hash_password, new_token, verify_password
 from .export import report_to_xlsx
 from .importer import parse_xlsx
 from .models import Report, Section, User, new_id
-from .storage import MemoryStorage, Storage
+from .storage import DuplicateWeekError, MemoryStorage, Storage
 from .template import default_option_sets, default_template
 
 app = FastAPI(title="Weekly Report System")
@@ -185,7 +185,10 @@ def create_report(user: User = Depends(current_user)):
         sections=sections,
         updated_at=dt.datetime.now().isoformat(timespec="seconds"),
     )
-    store.create_report(report)
+    try:
+        store.create_report(report)
+    except DuplicateWeekError:
+        raise HTTPException(status_code=409, detail="本周周报已存在,请勿重复创建")
     return report.to_dict()
 
 
@@ -231,7 +234,13 @@ async def import_report(file: UploadFile = File(...), user: User = Depends(curre
         report = parse_xlsx(data, user.id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"解析失败:{e}")
-    store.create_report(report)
+    try:
+        store.create_report(report)
+    except DuplicateWeekError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"已存在 {report.week_start} 当周的周报,请勿重复导入",
+        )
     return report.to_dict()
 
 

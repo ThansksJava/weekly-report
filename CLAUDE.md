@@ -19,9 +19,14 @@ python3 -m venv .venv
 # 前端 JS 语法检查 / 后端导入检查
 node --check app/static/app.js
 .venv/bin/python3 -c "import app.main"
+
+# 单元测试(标准库 unittest,无需 pytest;直接驱动存储层与端点函数)
+.venv/bin/python3 -m unittest discover tests -v
 ```
 
-没有测试套件和 linter。验证方式是 curl 打 API + puppeteer-core(/tmp/wr-pptr)驱动系统 Chrome 截图核对 UI。
+没有 linter。tests/ 下有少量 unittest 用例(无 pytest/httpx 依赖)。其余验证方式是 curl 打 API + puppeteer-core(/tmp/wr-pptr)驱动系统 Chrome 截图核对 UI。
+
+**周报唯一性**:同一用户的同一周(`week_start`)只允许一份周报。约束下沉在存储层 `create_report`——重复时抛 `DuplicateWeekError`,新建/导入两个端点都捕获并返回 409。换数据库实现时务必保持这一不变量。
 
 ## 架构
 

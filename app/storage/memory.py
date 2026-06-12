@@ -4,7 +4,7 @@ from __future__ import annotations
 import threading
 
 from ..models import Report, User
-from .base import Storage
+from .base import DuplicateWeekError, Storage
 
 
 class MemoryStorage(Storage):
@@ -38,6 +38,9 @@ class MemoryStorage(Storage):
     # ---- 周报 ----
     def create_report(self, report: Report) -> Report:
         with self._lock:
+            for r in self._reports.values():
+                if r.user_id == report.user_id and r.week_start == report.week_start:
+                    raise DuplicateWeekError(report.week_start)
             self._reports[report.id] = report
             return report
 
