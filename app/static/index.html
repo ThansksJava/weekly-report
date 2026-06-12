@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>周报 · Weekly Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh.js"></script>
+</head>
+<body>
+
+<!-- ========== 登录视图 ========== -->
+<div id="view-login" class="login-stage hidden">
+  <div class="login-art">
+    <div class="login-brand">
+      <span class="brand-mark">W</span>
+      <h1>Weekly<br>Report</h1>
+      <p class="brand-line"></p>
+      <p class="brand-sub">每周一次,把工作讲清楚。<br>可自定义结构 · 一键导出 · 邮件分享</p>
+    </div>
+    <div class="art-grid"></div>
+  </div>
+  <div class="login-panel">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <h2 id="login-title">登录</h2>
+      <p class="login-hint" id="login-hint">使用你的账号继续</p>
+      <label>用户名
+        <input type="text" id="f-username" required minlength="2" autocomplete="username">
+      </label>
+      <label>密码
+        <input type="password" id="f-password" required minlength="4" autocomplete="current-password">
+      </label>
+      <div id="register-extra" class="hidden">
+        <label>显示名称(可选)
+          <input type="text" id="f-display" placeholder="如:Feng Jie">
+        </label>
+        <label>邮箱(可选)
+          <input type="email" id="f-email" placeholder="you@unisys.com">
+        </label>
+      </div>
+      <p class="form-error" id="login-error"></p>
+      <button type="submit" class="btn-primary" id="login-submit">登 录</button>
+      <p class="login-switch">
+        <span id="switch-text">还没有账号?</span>
+        <a href="#" id="switch-mode">注册新账号</a>
+      </p>
+    </form>
+  </div>
+</div>
+
+<!-- ========== 主应用视图 ========== -->
+<div id="view-app" class="app-stage hidden">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <span class="brand-mark small">W</span>
+      <span class="sidebar-title">周报</span>
+    </div>
+    <button class="btn-new" id="btn-new-report">+ 新建本周周报</button>
+    <button class="btn-import" id="btn-import">↑ 导入历史周报 (.xlsx)</button>
+    <input type="file" id="import-file" accept=".xlsx" class="hidden">
+    <nav class="report-list" id="report-list"></nav>
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <span class="avatar" id="user-avatar">U</span>
+        <span class="user-name" id="user-name"></span>
+      </div>
+      <button class="link-btn" id="btn-logout">退出登录</button>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span class="save-state" id="save-state">已保存</span>
+      </div>
+      <div class="toolbar-right">
+        <button class="tbtn" id="btn-options" title="管理项目、优先级、级别、状态等下拉选项">选项管理</button>
+        <button class="tbtn" id="btn-save-template" title="将当前表头/区块结构保存为默认模板,新建周报时套用">存为我的模板</button>
+        <span class="tsep"></span>
+        <button class="tbtn" id="btn-export-png">导出图片</button>
+        <button class="tbtn" id="btn-export-xlsx">导出 Excel</button>
+        <button class="tbtn accent" id="btn-email">发送邮件</button>
+        <span class="tsep"></span>
+        <button class="tbtn danger" id="btn-delete-report">删除</button>
+      </div>
+    </div>
+
+    <div class="canvas-scroll">
+      <div class="empty-state" id="empty-state">
+        <p>还没有周报</p>
+        <p class="empty-sub">点击左侧「新建本周周报」开始</p>
+      </div>
+
+      <article class="report-sheet hidden" id="report-canvas">
+        <header class="sheet-head">
+          <input class="i-title" id="r-title" placeholder="周报标题">
+          <div class="week-range">
+            <span class="wr-label">周期</span>
+            <input type="text" id="r-start" class="date-input" placeholder="开始日期" readonly>
+            <span class="wr-dash">—</span>
+            <input type="text" id="r-end" class="date-input" placeholder="结束日期" readonly>
+          </div>
+          <input class="i-greeting" id="r-greeting" placeholder="问候语,如 Hi Team,">
+          <input class="i-subtitle" id="r-subtitle" placeholder="副标题">
+        </header>
+        <div id="sections"></div>
+        <button class="add-section no-export" id="btn-add-section">+ 添加区块</button>
+      </article>
+    </div>
+  </main>
+</div>
+
+<!-- 选项管理弹窗 -->
+<div class="modal-mask hidden" id="options-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>选项管理</h3>
+      <p class="modal-sub">维护项目、优先级、级别、状态等下拉候选值;列绑定选项集后,周报中即可直接下拉选择</p>
+      <button class="modal-x" id="options-close">×</button>
+    </div>
+    <div class="modal-body" id="options-body"></div>
+    <div class="modal-foot">
+      <div class="newset-row">
+        <input type="text" id="newset-name" placeholder="新选项集名称,如:模块">
+        <button class="mini-btn" id="newset-add">+ 添加选项集</button>
+      </div>
+      <button class="btn-primary slim" id="options-save">保 存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 列设置浮层(动态定位) -->
+<div class="col-menu hidden" id="col-menu"></div>
+
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
