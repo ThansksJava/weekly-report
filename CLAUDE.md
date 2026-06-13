@@ -26,6 +26,14 @@ node --check app/static/app.js
 
 没有 linter。tests/ 下有少量 unittest 用例(无 pytest/httpx 依赖)。其余验证方式是 curl 打 API + puppeteer-core(/tmp/wr-pptr)驱动系统 Chrome 截图核对 UI。
 
+**并行开发(git worktree)**:`trees/` 目录(已 gitignore)放并行 worktree,每个对应一个分支。各 worktree 通过软链共用主目录的 `.venv`(`ln -sfn ../../.venv .venv`),无需重复装依赖;各自从所属目录加载代码、独立端口启动(主 8000,worktree 用 8001/8002/8003…),数据互相隔离(各自 `MemoryStorage` 内存实例)。
+
+```bash
+git worktree add trees/dev1 -b dev1
+ln -sfn /Users/fengjie/workspace/unisys/weekly-report/.venv trees/dev1/.venv
+cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
+```
+
 **周报唯一性**:同一用户的同一周(`week_start`)只允许一份周报。约束下沉在存储层 `create_report`——重复时抛 `DuplicateWeekError`,新建/导入两个端点都捕获并返回 409。换数据库实现时务必保持这一不变量。
 
 ## 架构
