@@ -536,6 +536,52 @@ body.tpl-editing #btn-save-template,
 body.tpl-editing #btn-templates,
 body.tpl-editing .week-range { display: none; }
 
+/* ---------- 审批工作流 ---------- */
+/* 工具栏徽章(用户端复用管理端 .badge / .badge-* 配色) */
+.badge-draft { background: #e9e6df; color: var(--ink-soft); }
+#review-badge { align-self: center; }
+
+/* 侧栏列表项里的小徽章 */
+.report-item .ri-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.badge.mini { padding: 1px 7px; font-size: 10.5px; font-weight: 600; }
+
+/* 状态提示条(复用 tpl-edit-bar 的盒子风格) */
+.review-bar {
+  margin: 0 0 16px; padding: 11px 18px; border-radius: 3px;
+  font: 13px/1.5 var(--sans); color: var(--ink);
+  border: 1px solid var(--line); background: var(--sheet);
+}
+.review-bar.rejected { background: var(--accent-soft); border-color: var(--accent); }
+.review-bar.pending { background: #fbf3e3; border-color: var(--gold); }
+.review-bar.approved { background: #e9f1ea; border-color: #6f9e78; }
+
+/* 只读锁:隐藏所有编辑性控件 */
+body.report-locked #sections .no-export,
+body.report-locked #btn-add-section,
+body.report-locked #btn-options,
+body.report-locked #btn-templates,
+body.report-locked #btn-save-template,
+body.report-locked #btn-delete-report,
+body.report-locked .week-range { display: none !important; }
+body.report-locked .i-title,
+body.report-locked .i-greeting,
+body.report-locked .i-subtitle { cursor: default; }
+
+/* 审核历史时间线 */
+.hist-empty { color: var(--ink-faint); text-align: center; padding: 24px; }
+.timeline { list-style: none; margin: 0; padding: 4px 0; }
+.tl-item { position: relative; padding: 0 0 18px 22px; border-left: 2px solid var(--line); }
+.tl-item:last-child { border-left-color: transparent; padding-bottom: 4px; }
+.tl-dot { position: absolute; left: -7px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-faint); border: 2px solid var(--sheet); }
+.tl-approve .tl-dot { background: #2f6d3a; }
+.tl-reject .tl-dot { background: var(--accent); }
+.tl-submit .tl-dot { background: var(--ink); }
+.tl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.tl-actor { color: var(--ink-soft); font-size: 12.5px; }
+.tl-at { color: var(--ink-faint); font-size: 12px; }
+.snap-btn { margin-left: auto; }
+.tl-reason { margin-top: 4px; font-size: 13px; color: var(--ink-soft); }
+
 @media (max-width: 900px) {
   .login-art { display: none; }
   .report-sheet { padding: 28px 20px; }
@@ -625,6 +671,7 @@ body.tpl-editing .week-range { display: none; }
 }
 .rep-item:hover { border-color: var(--ink-soft); }
 .rep-item.active { border-color: var(--accent); background: var(--accent-soft); }
+.rep-item .ri-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rep-item .ri-week { font: 600 13px var(--sans); color: var(--ink); }
 .rep-item .ri-date { font: 11.5px var(--sans); color: var(--ink-faint); }
 .reports-view { flex: 1; overflow: auto; padding: 22px 26px; background: var(--paper); }
@@ -643,7 +690,18 @@ body.tpl-editing .week-range { display: none; }
 .ro-table th { background: var(--ink); color: var(--paper); font-weight: 600; white-space: nowrap; }
 .ro-table .ro-idx { width: 44px; text-align: center; color: var(--ink-soft); }
 .ro-table .ro-empty { text-align: center; color: var(--ink-faint); }
-.ro-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.ro-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.ro-toolbar .badge { margin-right: auto; }
+
+/* 待审批队列 */
+.pending-panel { margin-bottom: 34px; }
+.pending-batch { margin-left: auto; display: flex; gap: 8px; }
+.admin-table th.chk, .admin-table td.chk { width: 1%; text-align: center; }
+.admin-table .c-sub { color: var(--ink-faint); font-size: 12px; font-weight: 400; }
+
+/* 审核历史(查看周报弹窗内) */
+.ro-history { background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; padding: 14px 18px; margin-bottom: 18px; }
+.roh-title { font: 600 14px var(--serif); color: var(--ink); margin-bottom: 10px; }
 
 /* 单个周报全屏查看 */
 .fs-mask {

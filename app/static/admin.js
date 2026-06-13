@@ -31,6 +31,12 @@ function esc(s) {
 }
 
 const STATUS_LABEL = { pending: "待审核", approved: "已通过", rejected: "已拒绝" };
+const REVIEW_LABEL = { draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝" };
+const ACTION_LABEL = {
+  submit: "提交审核", withdraw: "撤回提交", approve: "审核通过", reject: "审核拒绝", reopen: "重新编辑",
+};
+
+let pending = [];  // 待审批周报队列
 
 /* ---------------- 视图切换 ---------------- */
 function showLogin() {
@@ -53,7 +59,7 @@ $("#login-form").addEventListener("submit", async (e) => {
       body: JSON.stringify({ username: $("#f-username").value.trim(), password: $("#f-password").value }),
     });
     showAdmin();
-    await loadUsers();
+    await refreshAll();
   } catch (err) {
     $("#login-error").textContent = err.message;
   }
@@ -64,6 +70,10 @@ $("#btn-logout").addEventListener("click", async () => {
   admin = null;
   showLogin();
 });
+
+async function refreshAll() {
+  await Promise.all([loadPending(), loadUsers()]);
+}
 
 /* ---------------- 用户列表 ---------------- */
 async function loadUsers() {
@@ -128,7 +138,7 @@ async function reject(u) {
 }
 async function delUser(u) {
   if (!confirm(`确定删除「${u.username}」?其全部周报将一并删除,不可恢复。`)) return;
-  try { await api(`/api/admin/users/${u.id}`, { method: "DELETE" }); toast("已删除"); await loadUsers(); }
+  try { await api(`/api/admin/users/${u.id}`, { method: "DELETE" }); toast("已删除"); await refreshAll(); }
   catch (e) { toast(e.message); }
 }
 
@@ -199,6 +209,102 @@ $("#reset-save").addEventListener("click", async () => {
   } catch (e) { $("#reset-error").textContent = e.message; }
 });
 
+/* ---------------- 待审批周报 ---------------- */
+async function loadPending() {
+  pending = await api("/api/admin/reports/pending");
+  renderPending();
+}
+
+function renderPending() {
+  $("#pending-panel").classList.toggle("hidden", pending.length === 0);
+  $("#pending-count").textContent = `${pending.length} 份待审`;
+  const tbody = $("#pending-body");
+  tbody.innerHTML = "";
+  $("#pending-all").checked = false;
+  for (const p of pending) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="chk"><input type="checkbox" class="pchk" value="${p.id}"></td>
+      <td class="c-user">${esc(p.display_name || p.username)} <span class="c-sub">@${esc(p.username)}</span></td>
+      <td>${fmtDot(p.week_start)} – ${fmtDot(p.week_end)}</td>
+      <td class="c-date">${(p.submitted_at || "").replace("T", " ")}</td>
+      <td class="ops"><div class="ops-wrap"></div></td>`;
+    const ops = tr.querySelector(".ops-wrap");
+    ops.appendChild(opBtn("查看", () => viewPending(p)));
+    ops.appendChild(opBtn("通过", () => reviewOne(p.id, "approve"), "ok"));
+    ops.appendChild(opBtn("拒绝", () => reviewOne(p.id, "reject"), "danger"));
+    tbody.appendChild(tr);
+  }
+}
+
+$("#pending-all").addEventListener("change", (e) => {
+  document.querySelectorAll(".pchk").forEach((c) => (c.checked = e.target.checked));
+});
+$("#batch-approve").addEventListener("click", () => batchReview("approve"));
+$("#batch-reject").addEventListener("click", () => batchReview("reject"));
+
+function selectedPendingIds() {
+  return [...document.querySelectorAll(".pchk:checked")].map((c) => c.value);
+}
+
+async function viewPending(p) {
+  await openReports({ id: p.user_id, username: p.username });
+  await showReport(p.id);
+}
+
+// 审批理由弹窗(通过/拒绝共用,理由可选)
+let reviewConfirmCb = null;
+function askReason(title, sub, onConfirm) {
+  $("#review-title").textContent = title;
+  $("#review-sub").textContent = sub;
+  $("#review-reason").value = "";
+  reviewConfirmCb = onConfirm;
+  openModal("#review-modal");
+}
+$("#review-close").addEventListener("click", () => closeModal("#review-modal"));
+$("#review-confirm").addEventListener("click", async () => {
+  const reason = $("#review-reason").value.trim();
+  const cb = reviewConfirmCb;
+  reviewConfirmCb = null;
+  closeModal("#review-modal");
+  if (cb) await cb(reason);
+});
+
+function promptReview(action, onConfirm) {
+  askReason(
+    action === "approve" ? "通过周报" : "拒绝周报",
+    action === "approve" ? "可选填通过备注,用户可在审核历史中看到" : "建议填写拒绝理由,用户将看到并据此修改",
+    onConfirm,
+  );
+}
+
+function reviewOne(rid, action) {
+  promptReview(action, async (reason) => {
+    try {
+      await api(`/api/admin/reports/${rid}/${action}`, { method: "POST", body: JSON.stringify({ reason }) });
+      toast(action === "approve" ? "已通过" : "已拒绝");
+      await refreshAll();
+      if (currentRep && currentRep.id === rid && !$("#reports-modal").classList.contains("hidden")) {
+        await showReport(rid);
+      }
+    } catch (e) { toast(e.message); }
+  });
+}
+
+function batchReview(action) {
+  const ids = selectedPendingIds();
+  if (!ids.length) { toast("请先勾选待审周报"); return; }
+  promptReview(action, async (reason) => {
+    try {
+      const r = await api("/api/admin/reports/review", {
+        method: "POST", body: JSON.stringify({ ids, action, reason }),
+      });
+      toast(`完成 ${r.done.length} 份${r.skipped.length ? `,跳过 ${r.skipped.length}` : ""}`);
+      await refreshAll();
+    } catch (e) { toast(e.message); }
+  });
+}
+
 /* ---------------- 查看用户周报(只读) ---------------- */
 async function openReports(u) {
   $("#reports-name").textContent = u.username;
@@ -216,7 +322,9 @@ async function openReports(u) {
   for (const r of list) {
     const b = document.createElement("button");
     b.className = "rep-item";
-    b.innerHTML = `<span class="ri-week">${fmtDot(r.week_start)} – ${fmtDot(r.week_end)}</span>
+    const st = r.review_status || "draft";
+    b.innerHTML = `<span class="ri-top"><span class="ri-week">${fmtDot(r.week_start)} – ${fmtDot(r.week_end)}</span>
+                   <span class="badge mini badge-${st}">${REVIEW_LABEL[st] || st}</span></span>
                    <span class="ri-date">更新于 ${(r.updated_at || "").replace("T", " ")}</span>`;
     b.addEventListener("click", async () => {
       document.querySelectorAll(".rep-item").forEach((el) => el.classList.remove("active"));
@@ -236,9 +344,51 @@ async function showReport(rid) {
   try { rep = await api(`/api/admin/reports/${rid}`); }
   catch (e) { $("#reports-view").innerHTML = `<p class="admin-empty">${esc(e.message)}</p>`; return; }
   currentRep = rep;
-  $("#reports-view").innerHTML =
-    `<div class="ro-toolbar"><button class="op-btn" id="fs-open">⛶ 全屏查看</button></div>` + renderReportHTML(rep);
+  const st = rep.review_status || "draft";
+  const canReview = st === "pending";
+  let head = `<div class="ro-toolbar">
+    <span class="badge badge-${st}">${REVIEW_LABEL[st] || st}</span>
+    <button class="op-btn" id="fs-open">⛶ 全屏查看</button>`;
+  if (canReview) {
+    head += `<button class="op-btn ok" id="rv-approve">通过</button>
+             <button class="op-btn danger" id="rv-reject">拒绝</button>`;
+  }
+  head += `</div>`;
+  $("#reports-view").innerHTML = head + renderReviewHistory(rep) + renderReportHTML(rep);
   $("#fs-open").addEventListener("click", openFullscreen);
+  if (canReview) {
+    $("#rv-approve").addEventListener("click", () => reviewOne(rep.id, "approve"));
+    $("#rv-reject").addEventListener("click", () => reviewOne(rep.id, "reject"));
+  }
+  $("#reports-view").querySelectorAll(".snap-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      const ev = (currentRep.review_history || []).find((x) => x.id === b.dataset.id);
+      if (ev && ev.snapshot) openSnapshotFs(ev);
+    });
+  });
+}
+
+// 审核历史时间线
+function renderReviewHistory(rep) {
+  const evs = (rep.review_history || []).slice().reverse();
+  if (!evs.length) return "";
+  let h = `<div class="ro-history"><div class="roh-title">审核历史</div><ul class="timeline">`;
+  for (const e of evs) {
+    const snap = e.action === "submit" && e.snapshot
+      ? `<button class="mini-btn snap-btn" data-id="${e.id}">查看快照</button>` : "";
+    const reason = e.reason ? `<div class="tl-reason">理由:${esc(e.reason)}</div>` : "";
+    h += `<li class="tl-item tl-${e.action}"><div class="tl-dot"></div><div class="tl-body">
+      <div class="tl-head"><b>${ACTION_LABEL[e.action] || e.action}</b>
+        <span class="tl-actor">${esc(e.actor)}</span>
+        <span class="tl-at">${(e.at || "").replace("T", " ")}</span>${snap}</div>${reason}</div></li>`;
+  }
+  return h + `</ul></div>`;
+}
+
+function openSnapshotFs(ev) {
+  $("#fs-title").textContent = `提交快照 · ${(ev.at || "").replace("T", " ")}`;
+  $("#fs-view").innerHTML = renderReportHTML(ev.snapshot);
+  $("#fs-modal").classList.remove("hidden");
 }
 
 /* ---------------- 全屏查看单个周报 ---------------- */
@@ -291,7 +441,7 @@ document.querySelectorAll(".modal-mask").forEach((m) => {
   try {
     admin = await api("/api/admin/me");
     showAdmin();
-    await loadUsers();
+    await refreshAll();
   } catch {
     showLogin();
   }

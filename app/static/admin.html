@@ -54,6 +54,29 @@
   </header>
 
   <main class="admin-main">
+    <!-- 待审批周报 -->
+    <section id="pending-panel" class="pending-panel hidden">
+      <div class="admin-head-row">
+        <h2>待审批周报</h2>
+        <span class="admin-count" id="pending-count"></span>
+        <div class="pending-batch">
+          <button class="op-btn ok" id="batch-approve">批量通过</button>
+          <button class="op-btn danger" id="batch-reject">批量拒绝</button>
+        </div>
+      </div>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th class="chk"><input type="checkbox" id="pending-all"></th>
+              <th>用户</th><th>周次</th><th>提交时间</th><th class="ops">操作</th>
+            </tr>
+          </thead>
+          <tbody id="pending-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <div class="admin-head-row">
       <h2>用户管理</h2>
       <span class="admin-count" id="user-count"></span>
@@ -143,6 +166,23 @@
       <div class="reports-view" id="reports-view">
         <p class="admin-empty">选择左侧周报查看</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 审批理由弹窗(通过/拒绝,理由可选) -->
+<div class="modal-mask hidden" id="review-modal">
+  <div class="modal slim-modal">
+    <div class="modal-head">
+      <h3 id="review-title">审批</h3>
+      <p class="modal-sub" id="review-sub">理由可选填,拒绝时建议填写以便用户修改</p>
+      <button class="modal-x" id="review-close">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fld">理由(可选)<textarea id="review-reason" rows="3"></textarea></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="review-confirm">确 定</button>
     </div>
   </div>
 </div>

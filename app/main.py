@@ -117,6 +117,16 @@ class TemplateIn(BaseModel):
     sections: list[dict[str, Any]] = []
 
 
+class ReviewIn(BaseModel):
+    reason: str = ""
+
+
+class BatchReviewIn(BaseModel):
+    ids: list[str] = []
+    action: str = ""  # approve | reject
+    reason: str = ""
+
+
 # ---------- 认证 ----------
 def current_user(wr_session: str | None = Cookie(default=None)) -> User:
     """普通用户依赖:要求已登录、角色为 user 且已审核通过。"""
@@ -289,9 +299,80 @@ def admin_reject_user(uid: str, admin: User = Depends(current_admin)):
 def admin_user_reports(uid: str, admin: User = Depends(current_admin)):
     _normal_user(uid)
     return [
-        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end, "updated_at": r.updated_at}
+        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end,
+         "updated_at": r.updated_at, "review_status": r.review_status}
         for r in store.list_reports(uid)
     ]
+
+
+def _last_submit_at(report: Report) -> str:
+    """取最近一次提交(submit)的时间,用于待审批队列排序/展示。"""
+    subs = [e for e in report.review_history if e.get("action") == "submit"]
+    return subs[-1]["at"] if subs else report.updated_at
+
+
+def _apply_review(report: Report, action: str, admin: User, reason: str) -> None:
+    """对 pending 周报执行审批(通过/拒绝);非 pending 抛 409。"""
+    if report.review_status != "pending":
+        raise HTTPException(status_code=409, detail="该周报当前不可审批")
+    actor = admin.display_name or admin.username
+    report.review_history.append(_review_event(action, actor, "admin", reason=reason))
+    report.review_status = "approved" if action == "approve" else "rejected"
+    store.update_report(report)
+
+
+@app.get("/api/admin/reports/pending")
+def admin_pending_reports(admin: User = Depends(current_admin)):
+    items = []
+    for u in store.list_users():
+        if u.role != "user":
+            continue
+        for r in store.list_reports(u.id):
+            if r.review_status == "pending":
+                items.append({
+                    "id": r.id, "user_id": u.id, "username": u.username,
+                    "display_name": u.display_name, "title": r.title,
+                    "week_start": r.week_start, "week_end": r.week_end,
+                    "submitted_at": _last_submit_at(r),
+                })
+    items.sort(key=lambda x: x["submitted_at"])
+    return items
+
+
+@app.post("/api/admin/reports/{report_id}/approve")
+def admin_approve_report(report_id: str, body: ReviewIn, admin: User = Depends(current_admin)):
+    report = store.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="周报不存在")
+    _normal_user(report.user_id)
+    _apply_review(report, "approve", admin, body.reason)
+    return report.to_dict()
+
+
+@app.post("/api/admin/reports/{report_id}/reject")
+def admin_reject_report(report_id: str, body: ReviewIn, admin: User = Depends(current_admin)):
+    report = store.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="周报不存在")
+    _normal_user(report.user_id)
+    _apply_review(report, "reject", admin, body.reason)
+    return report.to_dict()
+
+
+@app.post("/api/admin/reports/review")
+def admin_batch_review(body: BatchReviewIn, admin: User = Depends(current_admin)):
+    if body.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="action 必须为 approve 或 reject")
+    done, skipped = [], []
+    for rid in body.ids:
+        report = store.get_report(rid)
+        target = store.get_user(report.user_id) if report else None
+        if not report or not target or target.role != "user" or report.review_status != "pending":
+            skipped.append(rid)
+            continue
+        _apply_review(report, body.action, admin, body.reason)
+        done.append(rid)
+    return {"done": done, "skipped": skipped}
 
 
 @app.get("/api/admin/reports/{report_id}")
@@ -394,10 +475,29 @@ def _fill_dates(text: str, start: str, end: str) -> str:
     return text.replace("{start}", s).replace("{end}", e)
 
 
+def _review_event(action: str, actor: str, role: str, reason: str = "",
+                  snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    ev = {"id": new_id(), "action": action, "at": _now(), "actor": actor, "actor_role": role, "reason": reason}
+    if snapshot is not None:
+        ev["snapshot"] = snapshot
+    return ev
+
+
+def _report_snapshot(report: Report) -> dict[str, Any]:
+    """提交时冻结一份内容快照(不含 id/日期/审核字段)。"""
+    return {
+        "title": report.title,
+        "greeting": report.greeting,
+        "subtitle": report.subtitle,
+        "sections": [s.to_dict() for s in report.sections],
+    }
+
+
 @app.get("/api/reports")
 def list_reports(user: User = Depends(current_user)):
     return [
-        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end, "updated_at": r.updated_at}
+        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end,
+         "updated_at": r.updated_at, "review_status": r.review_status}
         for r in store.list_reports(user.id)
     ]
 
@@ -457,6 +557,8 @@ def get_report(report_id: str, user: User = Depends(current_user)):
 @app.put("/api/reports/{report_id}")
 def update_report(report_id: str, body: ReportIn, user: User = Depends(current_user)):
     report = _owned_report(report_id, user)
+    if report.review_status not in ("draft", "rejected"):
+        raise HTTPException(status_code=409, detail="周报审核中或已通过,不能修改")
     report.title = body.title
     report.greeting = body.greeting
     report.subtitle = body.subtitle
@@ -466,6 +568,44 @@ def update_report(report_id: str, body: ReportIn, user: User = Depends(current_u
     report.updated_at = dt.datetime.now().isoformat(timespec="seconds")
     store.update_report(report)
     return {"ok": True, "updated_at": report.updated_at}
+
+
+@app.post("/api/reports/{report_id}/submit")
+def submit_report(report_id: str, user: User = Depends(current_user)):
+    report = _owned_report(report_id, user)
+    if report.review_status not in ("draft", "rejected"):
+        raise HTTPException(status_code=409, detail="当前状态不能提交审核")
+    actor = user.display_name or user.username
+    report.review_history.append(
+        _review_event("submit", actor, "user", snapshot=_report_snapshot(report))
+    )
+    report.review_status = "pending"
+    store.update_report(report)
+    return report.to_dict()
+
+
+@app.post("/api/reports/{report_id}/withdraw")
+def withdraw_report(report_id: str, user: User = Depends(current_user)):
+    report = _owned_report(report_id, user)
+    if report.review_status != "pending":
+        raise HTTPException(status_code=409, detail="仅待审核的周报可撤回")
+    actor = user.display_name or user.username
+    report.review_history.append(_review_event("withdraw", actor, "user"))
+    report.review_status = "draft"
+    store.update_report(report)
+    return report.to_dict()
+
+
+@app.post("/api/reports/{report_id}/reopen")
+def reopen_report(report_id: str, user: User = Depends(current_user)):
+    report = _owned_report(report_id, user)
+    if report.review_status != "approved":
+        raise HTTPException(status_code=409, detail="仅已通过的周报可重新编辑")
+    actor = user.display_name or user.username
+    report.review_history.append(_review_event("reopen", actor, "user"))
+    report.review_status = "draft"
+    store.update_report(report)
+    return report.to_dict()
 
 
 @app.delete("/api/reports/{report_id}")

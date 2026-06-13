@@ -48,6 +48,8 @@ cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
 
 **删用户级联不变量**:`Storage.delete_user` 删用户时**必须同时删其全部周报与名下会话 token**(`MemoryStorage` 已实现;换数据库务必保持)。
 
+**周报审批工作流**:`Report` 有 `review_status`(`draft`|`pending`|`approved`|`rejected`)与 `review_history`(事件时间线)。状态机:新建/导入=`draft` → 用户「提交审核」=`pending`(**入一条 submit 事件并冻结内容快照**)→ 管理员「通过」=`approved` 或「拒绝」=`rejected`(均可附理由);`pending` 可被用户「撤回」回 `draft`,`approved` 可被用户「重新编辑」回 `draft`,`rejected` 改后可重新提交。**编辑约束**:`PUT /api/reports/{id}`、各 review 端点都按状态校验,仅 `draft`/`rejected` 可编辑/提交,否则 409;前端 [app/static/app.js](app/static/app.js) 同步用 **`body.report-locked`** 类锁定只读(禁用输入/单元格、隐藏编辑工具),双保险。`review_history` 每条 `{id, action, at, actor, actor_role, reason, snapshot}`,`snapshot` 仅 `submit` 携带(`{title,greeting,subtitle,sections}` 内容快照),即"历史提交快照"。用户端点:`POST /api/reports/{id}/submit|withdraw|reopen`;管理端点:`GET /api/admin/reports/pending`(跨用户待审队列)、`POST /api/admin/reports/{id}/approve|reject`、`POST /api/admin/reports/review`(批量,返回 `{done,skipped}`,非 pending 跳过),核心逻辑收敛在 `_apply_review()`。前端:用户端工具栏有状态徽章 + 提交/撤回/重新编辑/审核历史(`#history-modal`,submit 快照可只读全屏查看);管理端有「待审批周报」区块(勾选批量 + 单条审批,理由弹窗)与「查看周报」弹窗内的状态徽章 + 审核历史时间线 + 就地审批。侧栏列表项均带状态徽章。
+
 **默认账号(开发便利)**:[app/main.py](app/main.py) `_seed_default_users()` 在模块加载时确保存在管理员 `superadmin/superadmin`(role=admin)与开发便利普通用户 `demo/demo`(已审核),省去内存存储每次重启后重新注册登录的麻烦。构造用户走统一的 `_new_user()`。换持久化后端后可移除此段。
 
 **数据模型**([app/models.py](app/models.py)):`Report` = 顶部信息(title/greeting/subtitle/week_start/week_end)+ 多个 `Section`;每个 Section 有自定义 `Column` 列表和 rows(行是 `{col_key: value}` 字典)。`Column.type` 为 `text` 或 `select`,select 列通过 `Column.options` 按名称绑定用户的选项集(`User.option_sets: dict[名称, list[候选值]]`)。"表头完全可自定义"就是靠这个动态列结构实现的。

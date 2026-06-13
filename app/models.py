@@ -98,6 +98,12 @@ class Report:
     week_end: str
     sections: list[Section] = field(default_factory=list)
     updated_at: str = ""
+    # 审批状态:draft 草稿 | pending 待审核 | approved 已通过 | rejected 已拒绝
+    review_status: str = "draft"
+    # 审核历史(时间线)。每条:{id, action, at, actor, actor_role, reason, snapshot}
+    #   action: submit|withdraw|approve|reject|reopen
+    #   snapshot: 仅 submit 携带,{title, greeting, subtitle, sections} 的内容快照
+    review_history: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,4 +116,6 @@ class Report:
             "week_end": self.week_end,
             "sections": [s.to_dict() for s in self.sections],
             "updated_at": self.updated_at,
+            "review_status": self.review_status,
+            "review_history": self.review_history,
         }

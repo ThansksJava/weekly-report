@@ -151,7 +151,9 @@ async function refreshList(openFirst = false) {
   for (const r of reports) {
     const btn = document.createElement("button");
     btn.className = "report-item" + (current && current.id === r.id ? " active" : "");
-    btn.innerHTML = `<span class="ri-week">${fmtDot(r.week_start)} – ${fmtDot(r.week_end)}</span>
+    const st = r.review_status || "draft";
+    btn.innerHTML = `<span class="ri-top"><span class="ri-week">${fmtDot(r.week_start)} – ${fmtDot(r.week_end)}</span>
+                     <span class="badge mini badge-${st}">${REVIEW_LABEL[st] || st}</span></span>
                      <span class="ri-date">更新于 ${r.updated_at.replace("T", " ")}</span>`;
     btn.addEventListener("click", () => openReport(r.id));
     nav.appendChild(btn);
@@ -274,6 +276,12 @@ $("#btn-delete-report").addEventListener("click", async () => {
 });
 
 /* ---------------- 编辑器渲染 ---------------- */
+// 审核中/已通过的周报锁定为只读
+function isLocked() {
+  return !editingTemplateId && current &&
+    (current.review_status === "pending" || current.review_status === "approved");
+}
+
 function renderReport() {
   if (!current) return;
   $("#empty-state").classList.add("hidden");
@@ -285,9 +293,18 @@ function renderReport() {
   if (fpEnd) fpEnd.setDate(current.week_end, false);
   setDirty(false);
 
+  const locked = isLocked();
+  document.body.classList.toggle("report-locked", locked);
+  $("#r-title").disabled = $("#r-greeting").disabled = $("#r-subtitle").disabled = locked;
+
   const host = $("#sections");
   host.innerHTML = "";
   current.sections.forEach((sec, si) => host.appendChild(renderSection(sec, si)));
+  if (locked) {
+    host.querySelectorAll("[contenteditable]").forEach((el) => (el.contentEditable = "false"));
+    host.querySelectorAll("select.cell-select").forEach((el) => (el.disabled = true));
+  }
+  updateReviewUI();
 }
 
 function renderSection(sec, si) {
@@ -502,6 +519,153 @@ document.addEventListener("keydown", (e) => {
   }
 });
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); } });
+
+/* ---------------- 审批工作流 ---------------- */
+const REVIEW_LABEL = { draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝" };
+const ACTION_LABEL = {
+  submit: "提交审核", withdraw: "撤回提交", approve: "审核通过", reject: "审核拒绝", reopen: "重新编辑",
+};
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function lastReject() {
+  if (!current) return null;
+  const rejects = current.review_history.filter((e) => e.action === "reject");
+  return rejects.length ? rejects[rejects.length - 1] : null;
+}
+
+// 根据当前周报的审核状态刷新工具栏徽章/按钮与提示条
+function updateReviewUI() {
+  const tpl = !!editingTemplateId;
+  const st = current ? current.review_status : null;
+  const has = (id) => $("#" + id);
+  const show = (id, v) => has(id).classList.toggle("hidden", !v);
+
+  // 模板编辑模式下隐藏全部审核控件
+  if (tpl || !current) {
+    ["review-badge", "btn-submit-review", "btn-withdraw", "btn-reopen", "btn-history"].forEach((i) => show(i, false));
+    $("#review-bar").classList.add("hidden");
+    return;
+  }
+
+  const badge = $("#review-badge");
+  badge.textContent = REVIEW_LABEL[st] || st;
+  badge.className = "badge badge-" + st;
+  show("review-badge", true);
+
+  show("btn-submit-review", st === "draft" || st === "rejected");
+  $("#btn-submit-review").textContent = st === "rejected" ? "重新提交审核" : "提交审核";
+  show("btn-withdraw", st === "pending");
+  show("btn-reopen", st === "approved");
+  show("btn-history", current.review_history.length > 0);
+
+  // 提示条
+  const bar = $("#review-bar");
+  bar.className = "review-bar";
+  if (st === "rejected") {
+    const rj = lastReject();
+    bar.classList.add("rejected");
+    bar.innerHTML = `<span><b>审核被拒绝</b>${rj && rj.reason ? " · 理由:" + esc(rj.reason) : ""}。修改后可点工具栏「重新提交审核」。</span>`;
+  } else if (st === "pending") {
+    bar.classList.add("pending");
+    bar.innerHTML = `<span>已提交,<b>等待管理员审核</b>。审核期间不可编辑,如需修改请先「撤回」。</span>`;
+  } else if (st === "approved") {
+    bar.classList.add("approved");
+    bar.innerHTML = `<span><b>已通过审核</b>,周报已锁定。如需修改请点工具栏「重新编辑」退回草稿。</span>`;
+  } else {
+    bar.classList.add("hidden");
+  }
+}
+
+async function doReviewAction(path, okMsg) {
+  if (!current) return;
+  if (dirty) await saveReport();
+  try {
+    current = await api(`/api/reports/${current.id}/${path}`, { method: "POST" });
+    renderReport();
+    await refreshList();
+    refreshListActive();
+    toast(okMsg);
+  } catch (e) { toast(e.message); }
+}
+
+$("#btn-submit-review").addEventListener("click", () => doReviewAction("submit", "已提交审核"));
+$("#btn-withdraw").addEventListener("click", () => doReviewAction("withdraw", "已撤回,可继续编辑"));
+$("#btn-reopen").addEventListener("click", () => doReviewAction("reopen", "已退回草稿,可继续编辑"));
+
+/* ---- 审核历史弹窗 ---- */
+$("#btn-history").addEventListener("click", openHistory);
+$("#history-close").addEventListener("click", () => $("#history-modal").classList.add("hidden"));
+$("#history-close2").addEventListener("click", () => $("#history-modal").classList.add("hidden"));
+
+function openHistory() {
+  if (!current) return;
+  const body = $("#history-body");
+  const evs = current.review_history.slice().reverse();
+  if (!evs.length) { body.innerHTML = `<p class="hist-empty">暂无记录</p>`; }
+  else {
+    body.innerHTML = `<ul class="timeline">` + evs.map((e) => {
+      const snap = e.action === "submit" && e.snapshot
+        ? `<button class="mini-btn snap-btn" data-id="${e.id}">查看快照</button>` : "";
+      const reason = e.reason ? `<div class="tl-reason">理由:${esc(e.reason)}</div>` : "";
+      return `<li class="tl-item tl-${e.action}">
+        <div class="tl-dot"></div>
+        <div class="tl-body">
+          <div class="tl-head"><b>${ACTION_LABEL[e.action] || e.action}</b>
+            <span class="tl-actor">${esc(e.actor)}</span>
+            <span class="tl-at">${(e.at || "").replace("T", " ")}</span>${snap}</div>
+          ${reason}
+        </div></li>`;
+    }).join("") + `</ul>`;
+    body.querySelectorAll(".snap-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        const ev = current.review_history.find((x) => x.id === b.dataset.id);
+        if (ev && ev.snapshot) openSnapshot(ev);
+      });
+    });
+  }
+  $("#history-modal").classList.remove("hidden");
+}
+
+/* ---- 快照只读全屏 ---- */
+$("#snap-close").addEventListener("click", () => $("#snap-modal").classList.add("hidden"));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") $("#snap-modal").classList.add("hidden");
+});
+
+function openSnapshot(ev) {
+  $("#snap-title").textContent = `提交快照 · ${(ev.at || "").replace("T", " ")}`;
+  $("#snap-view").innerHTML = renderSnapshotHTML(ev.snapshot);
+  $("#snap-modal").classList.remove("hidden");
+}
+
+// 只读渲染一份内容快照(title/greeting/subtitle/sections)
+function renderSnapshotHTML(snap) {
+  let h = `<div class="ro-sheet"><div class="ro-title">${esc(snap.title)}</div>`;
+  if (snap.greeting) h += `<div class="ro-greeting">${esc(snap.greeting)}</div>`;
+  if (snap.subtitle) h += `<div class="ro-subtitle">${esc(snap.subtitle)}</div>`;
+  for (const sec of snap.sections || []) {
+    h += `<div class="ro-section-name">${esc(sec.name)}</div><div class="ro-table-scroll"><table class="ro-table"><thead><tr>`;
+    if (sec.show_index) h += `<th class="ro-idx">No.</th>`;
+    for (const col of sec.columns || []) h += `<th>${esc(col.label)}</th>`;
+    h += `</tr></thead><tbody>`;
+    const rows = sec.rows || [];
+    if (!rows.length) {
+      const span = (sec.columns || []).length + (sec.show_index ? 1 : 0);
+      h += `<tr><td class="ro-empty" colspan="${span || 1}">(空)</td></tr>`;
+    }
+    rows.forEach((row, i) => {
+      h += `<tr>`;
+      if (sec.show_index) h += `<td class="ro-idx">${i + 1}</td>`;
+      for (const col of sec.columns || []) h += `<td>${esc(row[col.key]).replace(/\n/g, "<br>")}</td>`;
+      h += `</tr>`;
+    });
+    h += `</tbody></table></div>`;
+  }
+  return h + `</div>`;
+}
 
 /* ---------------- 存为模板 ---------------- */
 // 把当前周报结构(标题中的日期反向替换为占位符)打包成模板正文

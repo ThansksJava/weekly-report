@@ -77,6 +77,11 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <span class="save-state" id="save-state">已保存</span>
+        <span class="badge hidden" id="review-badge"></span>
+        <button class="tbtn accent hidden" id="btn-submit-review">提交审核</button>
+        <button class="tbtn hidden" id="btn-withdraw">撤回</button>
+        <button class="tbtn hidden" id="btn-reopen">重新编辑</button>
+        <button class="tbtn hidden" id="btn-history">审核历史</button>
       </div>
       <div class="toolbar-right">
         <button class="tbtn" id="btn-options" title="管理项目、优先级、级别、状态等下拉选项">选项管理</button>
@@ -96,6 +101,7 @@
         <span>模板编辑模式 · 正在编辑「<b id="tpl-edit-name"></b>」。标题/副标题中可用 <code>{start}</code> / <code>{end}</code> 占位本周日期,改动自动保存到该模板。</span>
         <button class="btn-primary slim" id="tpl-edit-done">完成编辑</button>
       </div>
+      <div class="review-bar hidden" id="review-bar"></div>
       <div class="empty-state" id="empty-state">
         <p>还没有周报</p>
         <p class="empty-sub">点击左侧「新建周报」开始</p>
@@ -178,6 +184,30 @@
       <button class="btn-primary slim" id="newreport-create">创 建</button>
     </div>
   </div>
+</div>
+
+<!-- 审核历史弹窗 -->
+<div class="modal-mask hidden" id="history-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>审核历史</h3>
+      <p class="modal-sub">本周报的提交与审批记录;点「提交」记录可查看当时的内容快照</p>
+      <button class="modal-x" id="history-close">×</button>
+    </div>
+    <div class="modal-body" id="history-body"></div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="history-close2">完 成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 快照只读全屏查看 -->
+<div class="fs-mask hidden" id="snap-modal">
+  <div class="fs-bar">
+    <span class="fs-title" id="snap-title"></span>
+    <button class="btn-primary slim" id="snap-close">关闭</button>
+  </div>
+  <div class="fs-scroll" id="snap-view"></div>
 </div>
 
 <!-- 列设置浮层(动态定位) -->
