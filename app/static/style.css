@@ -500,6 +500,17 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 .tpl-name:hover { border-bottom-color: var(--line); }
 .tpl-name:focus { outline: none; border-bottom-color: var(--accent); }
 .tpl-row-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* 默认模板徽章:朱红实底胶囊 + 星标,醒目标示当前默认 */
+.tpl-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px;
+  font: 600 12px var(--sans); color: #fff; letter-spacing: .04em;
+  background: var(--accent);
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(194, 69, 44, .28);
+}
+.tpl-badge::before { content: "★"; font-size: 10px; line-height: 1; }
 
 /* ---------- 模板编辑模式 ---------- */
 .tpl-edit-bar {
