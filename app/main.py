@@ -202,7 +202,8 @@ def _user_brief(u: User) -> dict[str, Any]:
         "email": u.email,
         "status": u.status,
         "created_at": u.created_at,
-        "report_count": len(store.list_reports(u.id)),
+        # 管理员看不到草稿(draft),计数也只统计已提交进审核流程的周报
+        "report_count": sum(1 for r in store.list_reports(u.id) if r.review_status != "draft"),
     }
 
 
@@ -298,10 +299,11 @@ def admin_reject_user(uid: str, admin: User = Depends(current_admin)):
 @app.get("/api/admin/users/{uid}/reports")
 def admin_user_reports(uid: str, admin: User = Depends(current_admin)):
     _normal_user(uid)
+    # 草稿(draft)仅本人可见;管理员只能看到已提交进审核流程的周报
     return [
         {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end,
          "updated_at": r.updated_at, "review_status": r.review_status}
-        for r in store.list_reports(uid)
+        for r in store.list_reports(uid) if r.review_status != "draft"
     ]
 
 
@@ -378,7 +380,8 @@ def admin_batch_review(body: BatchReviewIn, admin: User = Depends(current_admin)
 @app.get("/api/admin/reports/{report_id}")
 def admin_get_report(report_id: str, admin: User = Depends(current_admin)):
     report = store.get_report(report_id)
-    if not report:
+    # 草稿对管理员等同不存在(仅本人可见)
+    if not report or report.review_status == "draft":
         raise HTTPException(status_code=404, detail="周报不存在")
     _normal_user(report.user_id)  # 仅允许查看普通用户的周报
     return report.to_dict()
