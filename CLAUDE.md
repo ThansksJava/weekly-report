@@ -44,6 +44,8 @@ cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
 
 **模板机制**:`User.template`(结构同 Report 去掉 id/日期)在新建周报时深拷贝,标题中 `{start}`/`{end}` 占位符替换为本周日期(格式 `2026.06.08`)。前端"存为我的模板"做反向替换(日期 → 占位符)。默认模板在 [app/template.py](app/template.py),对应团队 Excel 周报格式(My Weekly Plan + OMSE 两区块)。
 
+**周跨度**:`week_start`=本周一,`week_end`=本周日(`monday + 6` 天,整周)。新建周报([app/main.py](app/main.py) `create_report`)与导入兜底([app/importer.py](app/importer.py) 无法解析日期时)都按此归算。
+
 **前后端约定**:前端 [app/static/app.js](app/static/app.js) 是单文件 SPA,`current` 全局变量持有完整周报对象,所有编辑直接改它,1.5 秒防抖自动保存(整体 PUT)。`section.to_dict()` 的 JSON 结构在前后端间原样传递 —— 改 Section/Column 字段时两端都要动。认证是 httponly Cookie(`wr_session`)+ PBKDF2,所有 `/api/*`(除 register/login)经 `current_user` 依赖校验。
 
 **导出/导入**:Excel 导出在 [app/export.py](app/export.py)(openpyxl,服务端);PNG 导出在前端用 html2canvas(导出前给报告加 `.exporting` class 隐藏交互元素,CSS 中维护)。导入 [app/importer.py](app/importer.py) 是启发式解析:首个非空行 = 标题(正则提取日期范围),≥3 个非空单元格的行 = 表头行,其上方文本行 = 区块名,首列 "No." = 启用序号列;完整兼容本系统导出格式,对外部 Excel 是尽力解析。

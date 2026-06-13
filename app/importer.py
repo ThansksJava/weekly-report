@@ -105,7 +105,7 @@ def parse_xlsx(data: bytes, user_id: str) -> Report:
     else:
         today = dt.date.today()
         monday = today - dt.timedelta(days=today.weekday())
-        week_start, week_end = monday.isoformat(), (monday + dt.timedelta(days=4)).isoformat()
+        week_start, week_end = monday.isoformat(), (monday + dt.timedelta(days=6)).isoformat()
 
     return Report(
         id=new_id(), user_id=user_id,

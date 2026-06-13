@@ -168,8 +168,8 @@ def list_reports(user: User = Depends(current_user)):
 def create_report(user: User = Depends(current_user)):
     today = dt.date.today()
     monday = today - dt.timedelta(days=today.weekday())
-    friday = monday + dt.timedelta(days=4)
-    start, end = monday.isoformat(), friday.isoformat()
+    sunday = monday + dt.timedelta(days=6)
+    start, end = monday.isoformat(), sunday.isoformat()
     tpl = copy.deepcopy(user.template or default_template())
     sections = [Section.from_dict(s) for s in tpl.get("sections", [])]
     for s in sections:
