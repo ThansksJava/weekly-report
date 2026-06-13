@@ -35,6 +35,22 @@ class MemoryStorage(Storage):
         with self._lock:
             self._users[user.id] = user
 
+    def list_users(self) -> list[User]:
+        return sorted(self._users.values(), key=lambda u: u.created_at)
+
+    def delete_user(self, user_id: str) -> None:
+        with self._lock:
+            user = self._users.pop(user_id, None)
+            if not user:
+                return
+            self._username_index.pop(user.username.lower(), None)
+            # 级联:删该用户全部周报
+            for rid in [rid for rid, r in self._reports.items() if r.user_id == user_id]:
+                self._reports.pop(rid, None)
+            # 级联:删该用户名下会话
+            for tok in [t for t, uid in self._sessions.items() if uid == user_id]:
+                self._sessions.pop(tok, None)
+
     # ---- 周报 ----
     def create_report(self, report: Report) -> Report:
         with self._lock:

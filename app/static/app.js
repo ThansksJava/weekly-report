@@ -121,10 +121,15 @@ $("#login-form").addEventListener("submit", async (e) => {
     if (registerMode) {
       body.display_name = $("#f-display").value.trim();
       body.email = $("#f-email").value.trim();
-      me = await api("/api/register", { method: "POST", body: JSON.stringify(body) });
-    } else {
-      me = await api("/api/login", { method: "POST", body: JSON.stringify(body) });
+      await api("/api/register", { method: "POST", body: JSON.stringify(body) });
+      // 注册后待管理员审核,不自动登录:切回登录态并提示
+      $("#switch-mode").click();
+      $("#f-password").value = "";
+      $("#login-hint").textContent = "注册成功,待管理员审核通过后即可登录";
+      toast("注册成功,请等待管理员审核");
+      return;
     }
+    me = await api("/api/login", { method: "POST", body: JSON.stringify(body) });
     await showApp();
     await refreshList(true);
   } catch (err) {

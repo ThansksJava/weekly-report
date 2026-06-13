@@ -25,7 +25,45 @@ app = FastAPI(title="Weekly Report System")
 store: Storage = MemoryStorage()  # 替换此行即可切换数据库后端
 
 STATIC_DIR = Path(__file__).parent / "static"
-COOKIE = "wr_session"
+COOKIE = "wr_session"        # 普通用户会话 cookie
+ADMIN_COOKIE = "wr_admin"    # 管理员会话 cookie(与普通用户隔离,可同浏览器并存)
+
+
+def _now() -> str:
+    return dt.datetime.now().isoformat(timespec="seconds")
+
+
+def _new_user(username: str, password: str, *, role: str = "user",
+              status: str = "approved", display_name: str = "", email: str = "") -> User:
+    """构造一个带默认模板/选项集的用户(注册、管理员新建、种子共用)。"""
+    user = User(
+        id=new_id(),
+        username=username,
+        password_hash=hash_password(password),
+        display_name=display_name or username,
+        email=email,
+        role=role,
+        status=status,
+        created_at=_now(),
+        templates=default_templates(),
+        option_sets=default_option_sets(),
+    )
+    user.default_template_id = user.templates[0]["id"]
+    return user
+
+
+def _seed_default_users() -> None:
+    """启动时确保存在默认账号(内存存储重启即丢,换持久化后可移除)。
+    - 管理员 superadmin/superadmin(从 /admin 入口登录)
+    - 开发便利普通用户 demo/demo(已审核,可直接登录)
+    """
+    if not store.get_user_by_username("superadmin"):
+        store.create_user(_new_user("superadmin", "superadmin", role="admin", display_name="超级管理员"))
+    if not store.get_user_by_username("demo"):
+        store.create_user(_new_user("demo", "demo"))
+
+
+_seed_default_users()
 
 
 # ---------- 请求/响应模型 ----------
@@ -39,6 +77,22 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     username: str
     password: str
+
+
+class AdminPasswordIn(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=4, max_length=100)
+
+
+class AdminNewUserIn(BaseModel):
+    username: str = Field(min_length=2, max_length=40)
+    password: str = Field(min_length=4, max_length=100)
+    display_name: str = ""
+    email: str = ""
+
+
+class AdminResetPasswordIn(BaseModel):
+    new_password: str = Field(min_length=4, max_length=100)
 
 
 class ReportIn(BaseModel):
@@ -65,34 +119,38 @@ class TemplateIn(BaseModel):
 
 # ---------- 认证 ----------
 def current_user(wr_session: str | None = Cookie(default=None)) -> User:
+    """普通用户依赖:要求已登录、角色为 user 且已审核通过。"""
     if wr_session:
         uid = store.get_session(wr_session)
         if uid:
             user = store.get_user(uid)
-            if user:
+            if user and user.role == "user" and user.status == "approved":
+                return user
+    raise HTTPException(status_code=401, detail="未登录")
+
+
+def current_admin(wr_admin: str | None = Cookie(default=None)) -> User:
+    """管理员依赖:要求已登录且角色为 admin。"""
+    if wr_admin:
+        uid = store.get_session(wr_admin)
+        if uid:
+            user = store.get_user(uid)
+            if user and user.role == "admin":
                 return user
     raise HTTPException(status_code=401, detail="未登录")
 
 
 @app.post("/api/register")
-def register(body: RegisterIn, response: Response):
+def register(body: RegisterIn):
     if store.get_user_by_username(body.username):
         raise HTTPException(status_code=400, detail="用户名已存在")
-    user = User(
-        id=new_id(),
-        username=body.username,
-        password_hash=hash_password(body.password),
-        display_name=body.display_name or body.username,
-        email=body.email,
-        templates=default_templates(),
-        option_sets=default_option_sets(),
+    # 新注册用户待管理员审核,不自动登录
+    user = _new_user(
+        body.username, body.password,
+        status="pending", display_name=body.display_name, email=body.email,
     )
-    user.default_template_id = user.templates[0]["id"]
     store.create_user(user)
-    token = new_token()
-    store.set_session(token, user.id)
-    response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=7 * 86400)
-    return {"id": user.id, "username": user.username, "display_name": user.display_name}
+    return {"status": "pending", "username": user.username}
 
 
 @app.post("/api/login")
@@ -100,6 +158,12 @@ def login(body: LoginIn, response: Response):
     user = store.get_user_by_username(body.username)
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if user.role == "admin":
+        raise HTTPException(status_code=403, detail="管理员请从管理员入口 /admin 登录")
+    if user.status == "pending":
+        raise HTTPException(status_code=403, detail="账号待管理员审核,通过后方可登录")
+    if user.status == "rejected":
+        raise HTTPException(status_code=403, detail="账号未通过审核,请联系管理员")
     token = new_token()
     store.set_session(token, user.id)
     response.set_cookie(COOKIE, token, httponly=True, samesite="lax", max_age=7 * 86400)
@@ -117,6 +181,126 @@ def logout(response: Response, wr_session: str | None = Cookie(default=None)):
 @app.get("/api/me")
 def me(user: User = Depends(current_user)):
     return {"id": user.id, "username": user.username, "display_name": user.display_name, "email": user.email}
+
+
+# ---------- 管理员(独立入口 /admin,独立会话 cookie) ----------
+def _user_brief(u: User) -> dict[str, Any]:
+    return {
+        "id": u.id,
+        "username": u.username,
+        "display_name": u.display_name,
+        "email": u.email,
+        "status": u.status,
+        "created_at": u.created_at,
+        "report_count": len(store.list_reports(u.id)),
+    }
+
+
+def _normal_user(uid: str) -> User:
+    """取一个普通用户(管理操作目标),不存在或角色为 admin 时报错。"""
+    target = store.get_user(uid)
+    if not target or target.role != "user":
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return target
+
+
+@app.post("/api/admin/login")
+def admin_login(body: LoginIn, response: Response):
+    user = store.get_user_by_username(body.username)
+    if not user or user.role != "admin" or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    token = new_token()
+    store.set_session(token, user.id)
+    response.set_cookie(ADMIN_COOKIE, token, httponly=True, samesite="lax", max_age=7 * 86400)
+    return {"id": user.id, "username": user.username, "display_name": user.display_name}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(response: Response, wr_admin: str | None = Cookie(default=None)):
+    if wr_admin:
+        store.delete_session(wr_admin)
+    response.delete_cookie(ADMIN_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/admin/me")
+def admin_me(admin: User = Depends(current_admin)):
+    return {"id": admin.id, "username": admin.username, "display_name": admin.display_name}
+
+
+@app.post("/api/admin/password")
+def admin_change_password(body: AdminPasswordIn, admin: User = Depends(current_admin)):
+    if not verify_password(body.old_password, admin.password_hash):
+        raise HTTPException(status_code=400, detail="原密码错误")
+    admin.password_hash = hash_password(body.new_password)
+    store.update_user(admin)
+    return {"ok": True}
+
+
+@app.get("/api/admin/users")
+def admin_list_users(admin: User = Depends(current_admin)):
+    return [_user_brief(u) for u in store.list_users() if u.role == "user"]
+
+
+@app.post("/api/admin/users")
+def admin_create_user(body: AdminNewUserIn, admin: User = Depends(current_admin)):
+    if store.get_user_by_username(body.username):
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    user = _new_user(
+        body.username, body.password,
+        status="approved", display_name=body.display_name, email=body.email,
+    )
+    store.create_user(user)
+    return _user_brief(user)
+
+
+@app.delete("/api/admin/users/{uid}")
+def admin_delete_user(uid: str, admin: User = Depends(current_admin)):
+    _normal_user(uid)
+    store.delete_user(uid)
+    return {"ok": True}
+
+
+@app.post("/api/admin/users/{uid}/password")
+def admin_reset_password(uid: str, body: AdminResetPasswordIn, admin: User = Depends(current_admin)):
+    target = _normal_user(uid)
+    target.password_hash = hash_password(body.new_password)
+    store.update_user(target)
+    return {"ok": True}
+
+
+@app.post("/api/admin/users/{uid}/approve")
+def admin_approve_user(uid: str, admin: User = Depends(current_admin)):
+    target = _normal_user(uid)
+    target.status = "approved"
+    store.update_user(target)
+    return _user_brief(target)
+
+
+@app.post("/api/admin/users/{uid}/reject")
+def admin_reject_user(uid: str, admin: User = Depends(current_admin)):
+    target = _normal_user(uid)
+    target.status = "rejected"
+    store.update_user(target)
+    return _user_brief(target)
+
+
+@app.get("/api/admin/users/{uid}/reports")
+def admin_user_reports(uid: str, admin: User = Depends(current_admin)):
+    _normal_user(uid)
+    return [
+        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end, "updated_at": r.updated_at}
+        for r in store.list_reports(uid)
+    ]
+
+
+@app.get("/api/admin/reports/{report_id}")
+def admin_get_report(report_id: str, admin: User = Depends(current_admin)):
+    report = store.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="周报不存在")
+    _normal_user(report.user_id)  # 仅允许查看普通用户的周报
+    return report.to_dict()
 
 
 # ---------- 模板管理(每个用户可拥有多个命名模板) ----------
@@ -326,6 +510,11 @@ def export_xlsx(report_id: str, user: User = Depends(current_user)):
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/admin")
+def admin_page():
+    return FileResponse(STATIC_DIR / "admin.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

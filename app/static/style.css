@@ -541,3 +541,126 @@ body.tpl-editing .week-range { display: none; }
   .report-sheet { padding: 28px 20px; }
   .canvas-scroll { padding: 16px; }
 }
+
+/* ============================================================
+   管理后台 (/admin)
+   ============================================================ */
+.admin-stage { min-height: 100vh; display: flex; flex-direction: column; background: var(--paper); }
+.admin-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px; background: var(--ink); color: var(--paper);
+  position: sticky; top: 0; z-index: 10;
+}
+.admin-brand { display: flex; align-items: center; gap: 12px; }
+.admin-title { font: 600 18px var(--serif); letter-spacing: .02em; }
+.admin-actions { display: flex; align-items: center; gap: 14px; }
+.admin-bar .tbtn { background: transparent; color: var(--paper); border-color: rgba(247,245,240,.3); }
+.admin-bar .tbtn:hover { border-color: var(--paper); }
+.admin-who { font: 500 13px var(--sans); color: rgba(247,245,240,.7); margin-left: 6px; }
+
+.admin-main { max-width: 1180px; width: 100%; margin: 0 auto; padding: 32px 28px 60px; }
+.admin-head-row { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+.admin-head-row h2 { font: 600 24px var(--serif); color: var(--ink); }
+.admin-count { font: 13px var(--sans); color: var(--ink-faint); }
+.admin-empty { color: var(--ink-faint); font: 14px var(--sans); padding: 28px 4px; text-align: center; }
+
+.admin-table-wrap {
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.admin-table { width: 100%; border-collapse: collapse; font: 13.5px var(--sans); }
+.admin-table thead th {
+  text-align: left; font: 600 12px var(--sans); letter-spacing: .04em; color: var(--ink-soft);
+  padding: 13px 16px; background: var(--paper); border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.admin-table th.num, .admin-table td.num { text-align: center; }
+.admin-table tbody td { padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: middle; }
+.admin-table tbody tr:last-child td { border-bottom: none; }
+.admin-table tbody tr:hover { background: rgba(28,39,66,.02); }
+.admin-table .c-user { font-weight: 600; }
+.admin-table .c-email, .admin-table .c-date { color: var(--ink-soft); font-size: 12.5px; }
+.row-pending { background: var(--accent-soft) !important; }
+
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font: 600 11.5px var(--sans); letter-spacing: .03em; white-space: nowrap;
+}
+.badge-approved { background: #e3ede3; color: #2f6d3a; }
+.badge-pending { background: var(--accent); color: #fff; }
+.badge-rejected { background: #e9e6df; color: var(--ink-faint); }
+
+.admin-table th.ops, .admin-table td.ops { width: 1%; white-space: nowrap; }
+.ops-wrap { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; }
+.op-btn {
+  font: 500 12px var(--sans); color: var(--ink-soft);
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 2px;
+  padding: 5px 11px; cursor: pointer; white-space: nowrap;
+}
+.op-btn:hover { border-color: var(--ink); color: var(--ink); }
+.op-btn.ok { color: #2f6d3a; border-color: #b9d2bd; }
+.op-btn.ok:hover { background: #eef5ee; border-color: #2f6d3a; }
+.op-btn.danger:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 弹窗内字段 */
+.fld { display: block; font: 500 12.5px var(--sans); color: var(--ink-soft); margin-bottom: 16px; letter-spacing: .03em; }
+.fld input {
+  display: block; width: 100%; margin-top: 7px; padding: 10px 12px;
+  font: 14px var(--sans); color: var(--ink); background: var(--sheet);
+  border: 1px solid var(--line); border-radius: 2px;
+}
+.fld input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(28,39,66,.08); }
+
+/* 查看周报:左列表 + 右只读视图 */
+.wide-modal { width: min(960px, 94vw); max-height: 88vh; }
+.reports-modal-body { display: flex; gap: 0; padding: 0; min-height: 420px; max-height: 72vh; }
+.reports-side {
+  width: 230px; flex-shrink: 0; border-right: 1px solid var(--line);
+  overflow-y: auto; padding: 12px;
+}
+.rep-item {
+  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  padding: 10px 12px; margin-bottom: 6px; cursor: pointer;
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 3px;
+}
+.rep-item:hover { border-color: var(--ink-soft); }
+.rep-item.active { border-color: var(--accent); background: var(--accent-soft); }
+.rep-item .ri-week { font: 600 13px var(--sans); color: var(--ink); }
+.rep-item .ri-date { font: 11.5px var(--sans); color: var(--ink-faint); }
+.reports-view { flex: 1; overflow: auto; padding: 22px 26px; background: var(--paper); }
+
+/* 只读周报渲染 */
+.ro-sheet { background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; padding: 26px 28px; }
+.ro-title { font: 600 19px var(--serif); color: var(--ink); margin-bottom: 8px; }
+.ro-greeting { font: 14px var(--sans); color: var(--ink-soft); margin-bottom: 4px; }
+.ro-subtitle { font: 500 14px var(--sans); color: var(--ink-soft); margin-bottom: 14px; }
+.ro-section-name { font: 600 15px var(--serif); color: var(--ink); margin: 20px 0 8px; }
+.ro-table-scroll { overflow-x: auto; max-width: 100%; }
+.ro-table { width: 100%; border-collapse: collapse; font: 13px var(--sans); }
+.ro-table th, .ro-table td {
+  border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; color: var(--ink);
+}
+.ro-table th { background: var(--ink); color: var(--paper); font-weight: 600; white-space: nowrap; }
+.ro-table .ro-idx { width: 44px; text-align: center; color: var(--ink-soft); }
+.ro-table .ro-empty { text-align: center; color: var(--ink-faint); }
+.ro-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+
+/* 单个周报全屏查看 */
+.fs-mask {
+  position: fixed; inset: 0; z-index: 120;
+  background: var(--paper);
+  display: flex; flex-direction: column;
+}
+.fs-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px; background: var(--ink); color: var(--paper); flex-shrink: 0;
+}
+.fs-title { font: 600 16px var(--serif); letter-spacing: .02em; }
+.fs-scroll { flex: 1; overflow: auto; padding: 32px; }
+.fs-scroll .ro-sheet { max-width: 1100px; margin: 0 auto; padding: 36px 44px; }
+.fs-scroll .ro-title { font-size: 24px; }
+
+@media (max-width: 900px) {
+  .reports-modal-body { flex-direction: column; max-height: 78vh; }
+  .reports-side { width: auto; border-right: none; border-bottom: 1px solid var(--line); max-height: 160px; }
+}

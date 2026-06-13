@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 · Weekly Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ========== 管理员登录 ========== -->
+<div id="view-login" class="login-stage hidden">
+  <div class="login-art">
+    <div class="login-brand">
+      <span class="brand-mark">W</span>
+      <h1>Admin<br>Console</h1>
+      <p class="brand-line"></p>
+      <p class="brand-sub">周报系统 · 管理后台<br>用户审核 · 账号管理 · 周报查阅</p>
+    </div>
+    <div class="art-grid"></div>
+  </div>
+  <div class="login-panel">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <h2>管理员登录</h2>
+      <p class="login-hint">仅限管理员账号</p>
+      <label>用户名
+        <input type="text" id="f-username" required autocomplete="username">
+      </label>
+      <label>密码
+        <input type="password" id="f-password" required autocomplete="current-password">
+      </label>
+      <p class="form-error" id="login-error"></p>
+      <button type="submit" class="btn-primary" id="login-submit">登 录</button>
+      <p class="login-switch"><a href="/">← 返回用户端</a></p>
+    </form>
+  </div>
+</div>
+
+<!-- ========== 管理面板 ========== -->
+<div id="view-admin" class="admin-stage hidden">
+  <header class="admin-bar">
+    <div class="admin-brand">
+      <span class="brand-mark small">W</span>
+      <span class="admin-title">管理后台</span>
+    </div>
+    <div class="admin-actions">
+      <button class="tbtn" id="btn-add-user">+ 添加用户</button>
+      <button class="tbtn" id="btn-change-pwd">修改我的密码</button>
+      <span class="admin-who" id="admin-who"></span>
+      <button class="link-btn" id="btn-logout">退出登录</button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <div class="admin-head-row">
+      <h2>用户管理</h2>
+      <span class="admin-count" id="user-count"></span>
+    </div>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>用户名</th><th>显示名</th><th>邮箱</th><th>状态</th>
+            <th>注册时间</th><th class="num">周报数</th><th class="ops">操作</th>
+          </tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+      <p class="admin-empty hidden" id="users-empty">暂无普通用户</p>
+    </div>
+  </main>
+</div>
+
+<!-- 添加用户弹窗 -->
+<div class="modal-mask hidden" id="adduser-modal">
+  <div class="modal slim-modal">
+    <div class="modal-head">
+      <h3>添加用户</h3>
+      <p class="modal-sub">由管理员直接创建的账号默认已通过审核,可立即登录</p>
+      <button class="modal-x" id="adduser-close">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fld">用户名 *<input type="text" id="au-username"></label>
+      <label class="fld">初始密码 *<input type="text" id="au-password"></label>
+      <label class="fld">显示名称<input type="text" id="au-display"></label>
+      <label class="fld">邮箱<input type="email" id="au-email"></label>
+      <p class="form-error" id="adduser-error"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="adduser-save">创 建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改我的密码弹窗 -->
+<div class="modal-mask hidden" id="pwd-modal">
+  <div class="modal slim-modal">
+    <div class="modal-head">
+      <h3>修改我的密码</h3>
+      <button class="modal-x" id="pwd-close">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fld">原密码<input type="password" id="pw-old"></label>
+      <label class="fld">新密码<input type="password" id="pw-new"></label>
+      <p class="form-error" id="pwd-error"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="pwd-save">保 存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 重置某用户密码弹窗 -->
+<div class="modal-mask hidden" id="reset-modal">
+  <div class="modal slim-modal">
+    <div class="modal-head">
+      <h3>重置密码</h3>
+      <p class="modal-sub">为「<b id="reset-name"></b>」设置一个新密码</p>
+      <button class="modal-x" id="reset-close">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fld">新密码<input type="text" id="reset-new"></label>
+      <p class="form-error" id="reset-error"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="reset-save">保 存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 查看用户周报弹窗 -->
+<div class="modal-mask hidden" id="reports-modal">
+  <div class="modal wide-modal">
+    <div class="modal-head">
+      <h3>查看周报</h3>
+      <p class="modal-sub">「<b id="reports-name"></b>」提交的周报(只读)</p>
+      <button class="modal-x" id="reports-close">×</button>
+    </div>
+    <div class="modal-body reports-modal-body">
+      <nav class="reports-side" id="reports-side"></nav>
+      <div class="reports-view" id="reports-view">
+        <p class="admin-empty">选择左侧周报查看</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 单个周报全屏查看 -->
+<div class="fs-mask hidden" id="fs-modal">
+  <div class="fs-bar">
+    <span class="fs-title" id="fs-title"></span>
+    <button class="btn-primary slim" id="fs-close">关闭</button>
+  </div>
+  <div class="fs-scroll" id="fs-view"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/static/admin.js"></script>
+</body>
+</html>

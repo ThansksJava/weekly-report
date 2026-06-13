@@ -22,6 +22,12 @@ class User:
     password_hash: str
     display_name: str
     email: str = ""
+    # 角色:"user" 普通用户 | "admin" 管理员(从 /admin 入口登录)
+    role: str = "user"
+    # 审核状态:"pending" 待审核 | "approved" 已通过 | "rejected" 已拒绝
+    # 新注册用户为 pending,只有管理员通过后(approved)才能登录;种子/管理员新建为 approved
+    status: str = "approved"
+    created_at: str = ""  # 注册时间(ISO),管理端列表展示
     # 用户的模板集合(新建周报时复制其一)。每个模板是一个 dict:
     #   {"id", "name", "title", "greeting", "subtitle", "sections"}
     # 结构同 Report.to_dict() 去掉 id/user_id/日期,额外带 id+name 用于管理。

@@ -14,17 +14,11 @@ from app.models import User
 from app.storage import MemoryStorage
 
 
-class _Resp:
-    """register/login 需要的最小 Response 桩(只用到 set_cookie)。"""
-
-    def set_cookie(self, *a, **k):
-        pass
-
-
 class TemplatesTest(unittest.TestCase):
     def setUp(self):
         m.store = MemoryStorage()
-        m.register(RegisterIn(username="alice", password="secret"), _Resp())
+        # register 仅创建待审核用户、不再下发会话;模板端点接收 user 参数,直接取出即可
+        m.register(RegisterIn(username="alice", password="secret"))
         self.user = m.store.get_user_by_username("alice")
 
     def test_new_user_has_one_default_template(self):

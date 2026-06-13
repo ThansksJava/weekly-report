@@ -28,6 +28,16 @@ class Storage(ABC):
     @abstractmethod
     def update_user(self, user: User) -> None: ...
 
+    @abstractmethod
+    def list_users(self) -> list[User]:
+        """返回全部用户(管理端「查询所有用户」)。"""
+        ...
+
+    @abstractmethod
+    def delete_user(self, user_id: str) -> None:
+        """删除用户,并级联清理其全部周报与名下会话 token。换实现时务必保持此级联不变量。"""
+        ...
+
     # ---- 周报 ----
     @abstractmethod
     def create_report(self, report: Report) -> Report:

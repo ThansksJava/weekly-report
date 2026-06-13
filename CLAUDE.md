@@ -44,6 +44,12 @@ cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
 
 **存储抽象是核心设计**:业务代码只依赖 [app/storage/base.py](app/storage/base.py) 的 `Storage` 抽象接口(用户/周报/会话三组方法)。当前用 `MemoryStorage`(内存,重启丢数据)。换数据库 = 在 `app/storage/` 新增实现类 + 改 [app/main.py](app/main.py) 顶部 `store: Storage = MemoryStorage()` 这一行。
 
+**权限/角色系统**:`User` 有 `role`(`user`|`admin`)与 `status`(`pending`|`approved`|`rejected`)两字段。**普通用户注册后为 `pending`,只有管理员审核通过(`approved`)才能登录**;`login` 端点对 pending/rejected/admin 各返回 403。管理员从**独立地址 `/admin`**([app/static/admin.html](app/static/admin.html) + [admin.js](app/static/admin.js))登录,**用独立 cookie `wr_admin`**(普通用户用 `wr_session`,两套会话可同浏览器并存)。两个依赖:`current_user` 要求 role=user 且 approved;`current_admin` 要求 role=admin。管理端点 `/api/admin/*`:改自己密码、列出/新建(直接 approved)/删除/重置密码/审核(approve·reject)普通用户、查看任意普通用户的周报(`/api/admin/users/{uid}/reports` + 只读 `/api/admin/reports/{rid}`);均经 `current_admin`,且对普通用户的操作经 `_normal_user()` 拒绝越权操作管理员账号。
+
+**删用户级联不变量**:`Storage.delete_user` 删用户时**必须同时删其全部周报与名下会话 token**(`MemoryStorage` 已实现;换数据库务必保持)。
+
+**默认账号(开发便利)**:[app/main.py](app/main.py) `_seed_default_users()` 在模块加载时确保存在管理员 `superadmin/superadmin`(role=admin)与开发便利普通用户 `demo/demo`(已审核),省去内存存储每次重启后重新注册登录的麻烦。构造用户走统一的 `_new_user()`。换持久化后端后可移除此段。
+
 **数据模型**([app/models.py](app/models.py)):`Report` = 顶部信息(title/greeting/subtitle/week_start/week_end)+ 多个 `Section`;每个 Section 有自定义 `Column` 列表和 rows(行是 `{col_key: value}` 字典)。`Column.type` 为 `text` 或 `select`,select 列通过 `Column.options` 按名称绑定用户的选项集(`User.option_sets: dict[名称, list[候选值]]`)。"表头完全可自定义"就是靠这个动态列结构实现的。
 
 **模板机制(多模板)**:每个用户拥有 `User.templates`(命名模板列表,每项 `{id, name, title, greeting, subtitle, sections}`,结构同 Report 去掉 id/user_id/日期)+ `User.default_template_id`。新建周报时深拷贝选中的模板(`POST /api/reports?template_id=...`,缺省用默认模板),标题中 `{start}`/`{end}` 占位符替换为本周日期(格式 `2026.06.08`)。前端"存为模板"做反向替换(日期 → 占位符)并提示命名(同名覆盖)。`/api/templates` 一组端点做增删改/设默认;`main.py` 的 `_ensure_templates` 保证用户至少有一个模板且 `default_template_id` 有效(老数据/空模板用户也安全)。默认模板正文在 [app/template.py](app/template.py),对应团队 Excel 周报格式(My Weekly Plan + OMSE 两区块);`default_templates()` 把它包装成初始模板列表。前端侧栏"+ 新建本周周报"按钮在有多个模板时弹出模板选择浮层,工具栏"模板管理"弹窗做重命名/设默认/删除(至少保留一个)/**修改**。"修改"进入**模板编辑模式**(`app.js` 的 `enterTemplateEdit`/`leaveTemplateMode`/`editingTemplateId`):复用周报编辑器,把模板正文塞进 `current` 当"伪周报"编辑,`editingTemplateId` 非空时 `saveReport` 改写回 `PUT /api/templates/{id}`(而非周报端点);此模式下 `body.tpl-editing` 类隐藏与周报实例相关的工具(导出/邮件/删除/存为模板/模板管理/日期选择),显示顶部 `#tpl-edit-bar` 提示条与"完成编辑"按钮。标题/副标题中的 `{start}`/`{end}` 占位符在模板模式下原样显示与编辑。
