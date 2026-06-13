@@ -60,8 +60,7 @@
       <span class="brand-mark small">W</span>
       <span class="sidebar-title">周报</span>
     </div>
-    <button class="btn-new" id="btn-new-report">+ 新建本周周报</button>
-    <div class="tpl-picker hidden" id="tpl-picker"></div>
+    <button class="btn-new" id="btn-new-report">+ 新建周报</button>
     <button class="btn-import" id="btn-import">↑ 导入历史周报 (.xlsx)</button>
     <input type="file" id="import-file" accept=".xlsx" class="hidden">
     <nav class="report-list" id="report-list"></nav>
@@ -99,7 +98,7 @@
       </div>
       <div class="empty-state" id="empty-state">
         <p>还没有周报</p>
-        <p class="empty-sub">点击左侧「新建本周周报」开始</p>
+        <p class="empty-sub">点击左侧「新建周报」开始</p>
       </div>
 
       <article class="report-sheet hidden" id="report-canvas">
@@ -145,13 +144,35 @@
   <div class="modal">
     <div class="modal-head">
       <h3>模板管理</h3>
-      <p class="modal-sub">维护多个周报模板。新建周报时可在「新建本周周报」处选择套用哪个模板;默认模板用于一键新建</p>
+      <p class="modal-sub">维护多个周报模板。新建周报时可在「新建周报」弹窗中选择套用哪个模板;默认模板用于快速新建</p>
       <button class="modal-x" id="templates-close">×</button>
     </div>
     <div class="modal-body" id="templates-body"></div>
     <div class="modal-foot">
       <p class="modal-sub" style="margin:0;">提示:在某份周报上点工具栏「存为模板」可把当前结构新增为一个模板</p>
       <button class="btn-primary slim" id="templates-close2">完 成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新建周报:选择所属周 + 模板 -->
+<div class="modal-mask hidden" id="newreport-modal">
+  <div class="modal slim-modal">
+    <div class="modal-head">
+      <h3>新建周报</h3>
+      <p class="modal-sub">选择目标周内任意一天,系统将自动按整周(周一至周日)创建;有多个模板时可选择套用哪个</p>
+      <button class="modal-x" id="newreport-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="newreport-row">
+        <input type="text" id="newreport-date" class="date-input" placeholder="选择日期" readonly>
+        <button class="mini-btn" id="newreport-thisweek">本周</button>
+      </div>
+      <p class="newreport-range" id="newreport-range"></p>
+      <div class="tpl-picker hidden" id="newreport-templates"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="newreport-create">创 建</button>
     </div>
   </div>
 </div>

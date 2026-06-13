@@ -56,6 +56,18 @@ class DedupTest(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(len(m.store.list_reports(self.user.id)), 1)
 
+    # ---- 指定周新建 ----
+    def test_create_for_specified_week(self):
+        # 选周内任意一天(2026-06-17 是周三),应落到整周(周一~周日)
+        r = m.create_report(body=m.NewReportIn(week_start="2026-06-17"), user=self.user)
+        self.assertEqual(r["week_start"], "2026-06-15")  # 周一
+        self.assertEqual(r["week_end"], "2026-06-21")    # 周日(整周)
+
+    def test_create_rejects_invalid_date(self):
+        with self.assertRaises(HTTPException) as ctx:
+            m.create_report(body=m.NewReportIn(week_start="not-a-date"), user=self.user)
+        self.assertEqual(ctx.exception.status_code, 400)
+
     # ---- 导入端点 ----
     def test_import_blocks_duplicate_week(self):
         r1 = m.create_report(user=self.user)

@@ -173,20 +173,39 @@ function refreshListActive() {
   });
 }
 
-$("#btn-new-report").addEventListener("click", () => {
-  const p = $("#tpl-picker");
-  if (!p.classList.contains("hidden")) { p.classList.add("hidden"); return; }
-  if (templates.length <= 1) { createReportWith(null); return; } // 只有一个模板时直接创建
-  renderTplPicker();
-  p.classList.remove("hidden");
-});
+/* ---------------- 新建周报:选择所属周 + 模板 ---------------- */
+let fpNew = null;
+let newReportTemplateId = null; // 模态内选中的模板 id;null = 用默认模板
 
-function renderTplPicker() {
-  const p = $("#tpl-picker");
-  p.innerHTML = "";
+// 由任意一天推算所属周的周一~周日(ISO,整周)
+function weekRange(d) {
+  const day = (d.getDay() + 6) % 7; // 周一=0
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - day);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  return { start: iso(monday), end: iso(sunday) };
+}
+
+function updateNewRange() {
+  const sel = fpNew && fpNew.selectedDates[0];
+  if (!sel) { $("#newreport-range").textContent = ""; return; }
+  const { start, end } = weekRange(sel);
+  $("#newreport-range").textContent = `将创建:${fmtDot(start)} – ${fmtDot(end)}`;
+}
+
+// 模态内的模板选择;仅在用户有多个模板时显示
+function renderNewTplPicker() {
+  const wrap = $("#newreport-templates");
+  if (!wrap) return;
+  if (templates.length <= 1) { wrap.classList.add("hidden"); newReportTemplateId = null; return; }
+  if (!newReportTemplateId) newReportTemplateId = defaultTemplateId;
+  wrap.classList.remove("hidden");
+  wrap.innerHTML = "";
   for (const t of templates) {
     const b = document.createElement("button");
-    b.className = "tpl-pick-item";
+    b.className = "tpl-pick-item" + (t.id === newReportTemplateId ? " selected" : "");
     const name = document.createElement("span");
     name.textContent = t.name;
     b.appendChild(name);
@@ -196,32 +215,58 @@ function renderTplPicker() {
       badge.textContent = "默认";
       b.appendChild(badge);
     }
-    b.addEventListener("click", () => { p.classList.add("hidden"); createReportWith(t.id); });
-    p.appendChild(b);
+    b.addEventListener("click", () => { newReportTemplateId = t.id; renderNewTplPicker(); });
+    wrap.appendChild(b);
   }
 }
 
-async function createReportWith(templateId) {
+function openNewReportModal() {
+  if (!fpNew) {
+    fpNew = flatpickr("#newreport-date", {
+      dateFormat: "Y-m-d", locale: "zh", disableMobile: true,
+      onChange: updateNewRange,
+    });
+  }
+  newReportTemplateId = null;
+  fpNew.setDate(new Date(), false);
+  updateNewRange();
+  renderNewTplPicker();
+  $("#newreport-modal").classList.remove("hidden");
+}
+
+function closeNewReportModal() {
+  $("#newreport-modal").classList.add("hidden");
+}
+
+$("#btn-new-report").addEventListener("click", openNewReportModal);
+$("#newreport-close").addEventListener("click", closeNewReportModal);
+$("#newreport-modal").addEventListener("click", (e) => {
+  if (e.target.id === "newreport-modal") closeNewReportModal();
+});
+$("#newreport-thisweek").addEventListener("click", () => {
+  fpNew.setDate(new Date(), false);
+  updateNewRange();
+});
+
+$("#newreport-create").addEventListener("click", async () => {
+  const sel = fpNew && fpNew.selectedDates[0];
+  if (!sel) { toast("请选择日期"); return; }
+  const week_start = weekRange(sel).start;
+  const templateId = templates.length > 1 ? newReportTemplateId : null;
   if (dirty && current) await saveReport();
   if (editingTemplateId) leaveTemplateMode();
   try {
     const q = templateId ? `?template_id=${encodeURIComponent(templateId)}` : "";
-    current = await api("/api/reports" + q, { method: "POST" });
+    current = await api("/api/reports" + q, { method: "POST", body: JSON.stringify({ week_start }) });
   } catch (e) {
     toast(e.message);
     return;
   }
+  closeNewReportModal();
   await refreshList();
   renderReport();
   refreshListActive();
-  toast("已根据模板创建本周周报");
-}
-
-// 点击别处关闭模板选择浮层
-document.addEventListener("click", (e) => {
-  const p = $("#tpl-picker");
-  if (!p || p.classList.contains("hidden")) return;
-  if (!p.contains(e.target) && e.target !== $("#btn-new-report")) p.classList.add("hidden");
+  toast("已创建周报");
 });
 
 $("#btn-delete-report").addEventListener("click", async () => {

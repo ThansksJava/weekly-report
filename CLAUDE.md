@@ -36,6 +36,10 @@ cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
 
 **周报唯一性**:同一用户的同一周(`week_start`)只允许一份周报。约束下沉在存储层 `create_report`——重复时抛 `DuplicateWeekError`,新建/导入两个端点都捕获并返回 409。换数据库实现时务必保持这一不变量。
 
+**指定周新建**:`POST /api/reports` 接受可选 body `{week_start}`(周内任意一天的 ISO 日期),后端按其 `weekday()` 归算到整周(周一~周日,见下「周跨度」);留空则取当前周。前端「新建周报」按钮弹出选周弹窗(`#newreport-modal`,独立 flatpickr `fpNew`),`weekRange()` 在前端预览将创建的日期范围,真正归算仍以后端为准;多模板时弹窗内同时提供模板选择(`#newreport-templates`),创建时一并传 `?template_id=`。
+
+**周跨度**:`week_start`=本周一,`week_end`=本周日(`monday + 6` 天,整周)。新建周报([app/main.py](app/main.py) `create_report`)与导入兜底([app/importer.py](app/importer.py) 无法解析日期时)都按此归算。
+
 ## 架构
 
 **存储抽象是核心设计**:业务代码只依赖 [app/storage/base.py](app/storage/base.py) 的 `Storage` 抽象接口(用户/周报/会话三组方法)。当前用 `MemoryStorage`(内存,重启丢数据)。换数据库 = 在 `app/storage/` 新增实现类 + 改 [app/main.py](app/main.py) 顶部 `store: Storage = MemoryStorage()` 这一行。

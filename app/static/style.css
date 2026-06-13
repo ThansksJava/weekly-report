@@ -418,6 +418,13 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 .newset-row input:focus { outline: none; border-color: var(--ink); }
 .btn-primary.slim { width: auto; padding: 10px 34px; }
 
+/* ---------- 新建周报弹窗 ---------- */
+.slim-modal { width: 420px; }
+.slim-modal .modal-foot { justify-content: flex-end; }
+.newreport-row { display: flex; align-items: center; gap: 10px; }
+.newreport-row .date-input { flex: 1; }
+.newreport-range { margin-top: 14px; font-size: 13px; color: var(--ink-faint); }
+
 /* ---------- 日期组件(flatpickr 主题化) ---------- */
 .week-range { display: flex; align-items: center; gap: 8px; }
 .wr-label { color: var(--ink-faint); }
