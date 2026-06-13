@@ -466,25 +466,30 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---------- 模板选择浮层(侧栏「新建本周周报」下) ---------- */
+/* ---------- 模板选择(新建周报弹窗内,选周下方) ---------- */
 .tpl-picker {
-  margin: -8px 16px 12px;
+  margin-top: 14px;
   background: var(--sheet);
   border: 1px solid var(--line);
   border-radius: 2px;
   overflow: hidden;
-  box-shadow: var(--shadow);
 }
 .tpl-pick-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; text-align: left;
-  padding: 9px 12px;
+  padding: 10px 12px;
   font: 500 13px var(--sans); color: var(--ink);
   background: none; border: none; border-bottom: 1px solid var(--line);
-  cursor: pointer; transition: background .12s;
+  cursor: pointer; transition: background .12s, box-shadow .12s;
 }
 .tpl-pick-item:last-child { border-bottom: none; }
 .tpl-pick-item:hover { background: var(--accent-soft); }
+/* 选中态:左侧朱红色条 + 浅底,给出明确反馈 */
+.tpl-pick-item.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--accent);
+}
 .tpl-badge {
   font-size: 11px; font-weight: 600; color: var(--accent);
   background: var(--accent-soft); border-radius: 2px;
