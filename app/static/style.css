@@ -466,35 +466,24 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---------- 模板选择(新建周报弹窗内,选周下方) ---------- */
-.tpl-picker {
-  margin-top: 14px;
-  background: var(--sheet);
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  overflow: hidden;
+/* ---------- 模板选择(新建周报弹窗内,选周下方;下拉框) ---------- */
+.newreport-tpl {
+  margin-top: 16px;
+  display: flex; align-items: center; gap: 10px;
 }
-.tpl-pick-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; text-align: left;
-  padding: 10px 12px;
+.newreport-tpl label {
+  font: 500 13px var(--sans); color: var(--ink-soft);
+  flex-shrink: 0;
+}
+.tpl-select {
+  flex: 1; min-width: 0;
+  padding: 8px 10px;
   font: 500 13px var(--sans); color: var(--ink);
-  background: none; border: none; border-bottom: 1px solid var(--line);
-  cursor: pointer; transition: background .12s, box-shadow .12s;
+  background: var(--sheet);
+  border: 1px solid var(--line); border-radius: 2px;
+  cursor: pointer;
 }
-.tpl-pick-item:last-child { border-bottom: none; }
-.tpl-pick-item:hover { background: var(--accent-soft); }
-/* 选中态:左侧朱红色条 + 浅底,给出明确反馈 */
-.tpl-pick-item.selected {
-  background: var(--accent-soft);
-  box-shadow: inset 3px 0 0 var(--accent);
-  color: var(--accent);
-}
-.tpl-badge {
-  font-size: 11px; font-weight: 600; color: var(--accent);
-  background: var(--accent-soft); border-radius: 2px;
-  padding: 1px 7px; flex-shrink: 0;
-}
+.tpl-select:focus { outline: none; border-color: var(--accent); }
 
 /* ---------- 模板管理弹窗 ---------- */
 .tpl-row {

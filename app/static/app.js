@@ -175,7 +175,6 @@ function refreshListActive() {
 
 /* ---------------- 新建周报:选择所属周 + 模板 ---------------- */
 let fpNew = null;
-let newReportTemplateId = null; // 模态内选中的模板 id;null = 用默认模板
 
 // 由任意一天推算所属周的周一~周日(ISO,整周)
 function weekRange(d) {
@@ -195,29 +194,21 @@ function updateNewRange() {
   $("#newreport-range").textContent = `将创建:${fmtDot(start)} – ${fmtDot(end)}`;
 }
 
-// 模态内的模板选择;仅在用户有多个模板时显示
+// 模态内的模板选择(下拉框);仅在用户有多个模板时显示
 function renderNewTplPicker() {
   const wrap = $("#newreport-templates");
-  if (!wrap) return;
-  if (templates.length <= 1) { wrap.classList.add("hidden"); newReportTemplateId = null; return; }
-  if (!newReportTemplateId) newReportTemplateId = defaultTemplateId;
+  const sel = $("#newreport-template-select");
+  if (!wrap || !sel) return;
+  if (templates.length <= 1) { wrap.classList.add("hidden"); return; }
   wrap.classList.remove("hidden");
-  wrap.innerHTML = "";
+  sel.innerHTML = "";
   for (const t of templates) {
-    const b = document.createElement("button");
-    b.className = "tpl-pick-item" + (t.id === newReportTemplateId ? " selected" : "");
-    const name = document.createElement("span");
-    name.textContent = t.name;
-    b.appendChild(name);
-    if (t.id === defaultTemplateId) {
-      const badge = document.createElement("span");
-      badge.className = "tpl-badge";
-      badge.textContent = "默认";
-      b.appendChild(badge);
-    }
-    b.addEventListener("click", () => { newReportTemplateId = t.id; renderNewTplPicker(); });
-    wrap.appendChild(b);
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.id === defaultTemplateId ? `${t.name}(默认)` : t.name;
+    sel.appendChild(opt);
   }
+  sel.value = defaultTemplateId; // 默认选中默认模板
 }
 
 function openNewReportModal() {
@@ -227,7 +218,6 @@ function openNewReportModal() {
       onChange: updateNewRange,
     });
   }
-  newReportTemplateId = null;
   fpNew.setDate(new Date(), false);
   updateNewRange();
   renderNewTplPicker();
@@ -252,7 +242,7 @@ $("#newreport-create").addEventListener("click", async () => {
   const sel = fpNew && fpNew.selectedDates[0];
   if (!sel) { toast("请选择日期"); return; }
   const week_start = weekRange(sel).start;
-  const templateId = templates.length > 1 ? newReportTemplateId : null;
+  const templateId = templates.length > 1 ? $("#newreport-template-select").value : null;
   if (dirty && current) await saveReport();
   if (editingTemplateId) leaveTemplateMode();
   try {
