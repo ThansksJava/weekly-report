@@ -16,6 +16,23 @@ def default_option_sets() -> dict[str, list[str]]:
     }
 
 
+def default_templates() -> list[dict[str, Any]]:
+    """新用户的初始模板集合:仅含一个名为「默认模板」的内置模板。"""
+    return [named_template("默认模板", default_template())]
+
+
+def named_template(name: str, body: dict[str, Any]) -> dict[str, Any]:
+    """把模板正文(title/greeting/subtitle/sections)包装成带 id+name 的可管理模板。"""
+    return {
+        "id": new_id(),
+        "name": name,
+        "title": body.get("title", ""),
+        "greeting": body.get("greeting", ""),
+        "subtitle": body.get("subtitle", ""),
+        "sections": body.get("sections", []),
+    }
+
+
 def default_template() -> dict[str, Any]:
     return {
         "title": "Weekly plan & follow-up report {start} - {end}",

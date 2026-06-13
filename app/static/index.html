@@ -61,6 +61,7 @@
       <span class="sidebar-title">周报</span>
     </div>
     <button class="btn-new" id="btn-new-report">+ 新建本周周报</button>
+    <div class="tpl-picker hidden" id="tpl-picker"></div>
     <button class="btn-import" id="btn-import">↑ 导入历史周报 (.xlsx)</button>
     <input type="file" id="import-file" accept=".xlsx" class="hidden">
     <nav class="report-list" id="report-list"></nav>
@@ -80,7 +81,8 @@
       </div>
       <div class="toolbar-right">
         <button class="tbtn" id="btn-options" title="管理项目、优先级、级别、状态等下拉选项">选项管理</button>
-        <button class="tbtn" id="btn-save-template" title="将当前表头/区块结构保存为默认模板,新建周报时套用">存为我的模板</button>
+        <button class="tbtn" id="btn-templates" title="管理多个周报模板:重命名、设为默认、删除">模板管理</button>
+        <button class="tbtn" id="btn-save-template" title="将当前表头/区块结构存为一个模板,新建周报时套用">存为模板</button>
         <span class="tsep"></span>
         <button class="tbtn" id="btn-export-png">导出图片</button>
         <button class="tbtn" id="btn-export-xlsx">导出 Excel</button>
@@ -91,6 +93,10 @@
     </div>
 
     <div class="canvas-scroll">
+      <div class="tpl-edit-bar hidden" id="tpl-edit-bar">
+        <span>模板编辑模式 · 正在编辑「<b id="tpl-edit-name"></b>」。标题/副标题中可用 <code>{start}</code> / <code>{end}</code> 占位本周日期,改动自动保存到该模板。</span>
+        <button class="btn-primary slim" id="tpl-edit-done">完成编辑</button>
+      </div>
       <div class="empty-state" id="empty-state">
         <p>还没有周报</p>
         <p class="empty-sub">点击左侧「新建本周周报」开始</p>
@@ -130,6 +136,22 @@
         <button class="mini-btn" id="newset-add">+ 添加选项集</button>
       </div>
       <button class="btn-primary slim" id="options-save">保 存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 模板管理弹窗 -->
+<div class="modal-mask hidden" id="templates-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>模板管理</h3>
+      <p class="modal-sub">维护多个周报模板。新建周报时可在「新建本周周报」处选择套用哪个模板;默认模板用于一键新建</p>
+      <button class="modal-x" id="templates-close">×</button>
+    </div>
+    <div class="modal-body" id="templates-body"></div>
+    <div class="modal-foot">
+      <p class="modal-sub" style="margin:0;">提示:在某份周报上点工具栏「存为模板」可把当前结构新增为一个模板</p>
+      <button class="btn-primary slim" id="templates-close2">完 成</button>
     </div>
   </div>
 </div>

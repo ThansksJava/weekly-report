@@ -22,8 +22,12 @@ class User:
     password_hash: str
     display_name: str
     email: str = ""
-    # 用户的默认模板(新建周报时复制),结构同 Report.to_dict() 的 sections/标题部分
-    template: dict[str, Any] | None = None
+    # 用户的模板集合(新建周报时复制其一)。每个模板是一个 dict:
+    #   {"id", "name", "title", "greeting", "subtitle", "sections"}
+    # 结构同 Report.to_dict() 去掉 id/user_id/日期,额外带 id+name 用于管理。
+    templates: list[dict[str, Any]] = field(default_factory=list)
+    # 默认模板 id(新建周报未指定模板时使用);为空或失效时回退到模板列表首个
+    default_template_id: str = ""
     # 用户的选项集:名称 -> 候选值列表,如 {"项目": ["MA","D890"], "优先级": [...]}
     # 列可绑定某个选项集,周报单元格即变为下拉选择
     option_sets: dict[str, list[str]] = field(default_factory=dict)
