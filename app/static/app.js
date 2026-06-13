@@ -151,7 +151,10 @@ async function refreshList(openFirst = false) {
   for (const r of reports) {
     const btn = document.createElement("button");
     btn.className = "report-item" + (current && current.id === r.id ? " active" : "");
-    btn.innerHTML = `<span class="ri-week">${fmtDot(r.week_start)} – ${fmtDot(r.week_end)}</span>
+    const badge = r.status === "submitted"
+      ? `<span class="ri-badge submitted">已提交</span>`
+      : `<span class="ri-badge draft">草稿</span>`;
+    btn.innerHTML = `<span class="ri-week">${fmtDot(r.week_start)} – ${fmtDot(r.week_end)}${badge}</span>
                      <span class="ri-date">更新于 ${r.updated_at.replace("T", " ")}</span>`;
     btn.addEventListener("click", () => openReport(r.id));
     nav.appendChild(btn);
@@ -264,6 +267,35 @@ $("#newreport-create").addEventListener("click", async () => {
   toast("已创建周报");
 });
 
+$("#btn-stash").addEventListener("click", async () => {
+  if (!current || editingTemplateId) return;
+  await saveReport();
+  toast("已暂存");
+});
+
+$("#btn-submit").addEventListener("click", async () => {
+  if (!current || editingTemplateId) return;
+  const submitted = current.status === "submitted";
+  if (submitted) {
+    if (!confirm("撤回提交后,管理员将不再能看到这份周报。确定撤回?")) return;
+    try {
+      await api(`/api/reports/${current.id}/withdraw`, { method: "POST" });
+      current.status = "draft"; current.submitted_at = "";
+      toast("已撤回提交");
+    } catch (e) { toast(e.message); return; }
+  } else {
+    if (dirty) await saveReport(); // 提交前先保存最新内容
+    try {
+      const r = await api(`/api/reports/${current.id}/submit`, { method: "POST" });
+      current.status = "submitted"; current.submitted_at = r.submitted_at;
+      toast("已提交,管理员可查看");
+    } catch (e) { toast(e.message); return; }
+  }
+  renderStatus();
+  await refreshList();
+  refreshListActive();
+});
+
 $("#btn-delete-report").addEventListener("click", async () => {
   if (!current) return;
   if (!confirm("确定删除这份周报吗?此操作不可恢复。")) return;
@@ -288,6 +320,27 @@ function renderReport() {
   const host = $("#sections");
   host.innerHTML = "";
   current.sections.forEach((sec, si) => host.appendChild(renderSection(sec, si)));
+  renderStatus();
+}
+
+/* ---------------- 提交状态(暂存 / 提交) ---------------- */
+// 模板编辑模式下隐藏暂存/提交;否则按 current.status 切换提交按钮文案与状态胶囊
+function renderStatus() {
+  const pill = $("#report-status");
+  const submitBtn = $("#btn-submit");
+  const stashBtn = $("#btn-stash");
+  const isTpl = !!editingTemplateId;
+  const show = !!current && !isTpl;
+  submitBtn.classList.toggle("hidden", !show);
+  stashBtn.classList.toggle("hidden", !show);
+  pill.classList.toggle("hidden", !show);
+  if (!show) return;
+  const submitted = current.status === "submitted";
+  pill.textContent = submitted ? "已提交" : "草稿";
+  pill.classList.toggle("submitted", submitted);
+  pill.classList.toggle("draft", !submitted);
+  submitBtn.textContent = submitted ? "撤回提交" : "提交";
+  submitBtn.classList.toggle("accent", !submitted);
 }
 
 function renderSection(sec, si) {

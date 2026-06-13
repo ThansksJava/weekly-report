@@ -98,6 +98,10 @@ class Report:
     week_end: str
     sections: list[Section] = field(default_factory=list)
     updated_at: str = ""
+    # 提交状态:"draft" 暂存(仅本人可见)| "submitted" 已提交(管理员可见)
+    # 新建周报默认 draft;用户点「提交」后变 submitted,管理员才能看到
+    status: str = "draft"
+    submitted_at: str = ""  # 最近一次提交时间(ISO)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,4 +114,6 @@ class Report:
             "week_end": self.week_end,
             "sections": [s.to_dict() for s in self.sections],
             "updated_at": self.updated_at,
+            "status": self.status,
+            "submitted_at": self.submitted_at,
         }

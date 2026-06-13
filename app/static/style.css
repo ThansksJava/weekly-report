@@ -127,6 +127,12 @@ body {
 .report-item.active { background: rgba(247,245,240,.13); color: #fff; box-shadow: inset 3px 0 0 var(--accent); }
 .report-item .ri-week { font-weight: 600; display: block; }
 .report-item .ri-date { font-size: 11.5px; color: rgba(247,245,240,.45); }
+.report-item .ri-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  padding: 1px 7px; border-radius: 999px; margin-left: 8px; vertical-align: 1px;
+}
+.report-item .ri-badge.draft { color: rgba(247,245,240,.55); background: rgba(247,245,240,.12); }
+.report-item .ri-badge.submitted { color: #d8f0e2; background: rgba(31,122,77,.55); }
 .sidebar-foot { padding: 14px 18px 18px; border-top: 1px solid rgba(247,245,240,.12); }
 .user-chip { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .avatar {
@@ -147,8 +153,15 @@ body {
   background: var(--paper);
   border-bottom: 1px solid var(--line);
 }
+.toolbar-left { display: flex; align-items: center; gap: 12px; }
 .save-state { font-size: 12.5px; color: var(--ink-faint); }
 .save-state.dirty { color: var(--gold); }
+.report-status {
+  font-size: 11.5px; font-weight: 600; letter-spacing: .04em;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid;
+}
+.report-status.draft { color: var(--ink-faint); border-color: var(--line); background: var(--sheet); }
+.report-status.submitted { color: #1f7a4d; border-color: #bfe3cf; background: #eaf6ef; }
 .toolbar-right { display: flex; align-items: center; gap: 8px; }
 .tbtn {
   padding: 7px 14px;
@@ -534,6 +547,9 @@ body.tpl-editing #btn-email,
 body.tpl-editing #btn-delete-report,
 body.tpl-editing #btn-save-template,
 body.tpl-editing #btn-templates,
+body.tpl-editing #btn-stash,
+body.tpl-editing #btn-submit,
+body.tpl-editing #report-status,
 body.tpl-editing .week-range { display: none; }
 
 @media (max-width: 900px) {

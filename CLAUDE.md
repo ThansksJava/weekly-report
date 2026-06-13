@@ -46,6 +46,8 @@ cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
 
 **权限/角色系统**:`User` 有 `role`(`user`|`admin`)与 `status`(`pending`|`approved`|`rejected`)两字段。**普通用户注册后为 `pending`,只有管理员审核通过(`approved`)才能登录**;`login` 端点对 pending/rejected/admin 各返回 403。管理员从**独立地址 `/admin`**([app/static/admin.html](app/static/admin.html) + [admin.js](app/static/admin.js))登录,**用独立 cookie `wr_admin`**(普通用户用 `wr_session`,两套会话可同浏览器并存)。两个依赖:`current_user` 要求 role=user 且 approved;`current_admin` 要求 role=admin。管理端点 `/api/admin/*`:改自己密码、列出/新建(直接 approved)/删除/重置密码/审核(approve·reject)普通用户、查看任意普通用户的周报(`/api/admin/users/{uid}/reports` + 只读 `/api/admin/reports/{rid}`);均经 `current_admin`,且对普通用户的操作经 `_normal_user()` 拒绝越权操作管理员账号。
 
+**周报提交状态(暂存/提交)**:`Report` 有 `status`(`draft` 暂存 | `submitted` 已提交)+ `submitted_at`。**新建/导入的周报默认 `draft`,仅本人可见;用户点「提交」(`POST /api/reports/{id}/submit`)后变 `submitted`,管理员才能看到**;「撤回」(`/withdraw`)回到 `draft`。这是后端不变量:管理端 `admin_user_reports` 只列 `status=="submitted"`,`admin_get_report` 对非 submitted 的周报返回 404,`_user_brief.report_count` 也只统计已提交。普通用户的 `PUT /api/reports/{id}`(自动保存)**不改 status**——提交后继续编辑仍为 submitted(管理员看到最新内容)。前端工具栏「暂存」按钮即显式保存(沿用 1.5s 自动保存),「提交/撤回」按钮按 `current.status` 切换文案,侧栏列表项与工具栏状态胶囊显示 草稿/已提交。
+
 **删用户级联不变量**:`Storage.delete_user` 删用户时**必须同时删其全部周报与名下会话 token**(`MemoryStorage` 已实现;换数据库务必保持)。
 
 **默认账号(开发便利)**:[app/main.py](app/main.py) `_seed_default_users()` 在模块加载时确保存在管理员 `superadmin/superadmin`(role=admin)与开发便利普通用户 `demo/demo`(已审核),省去内存存储每次重启后重新注册登录的麻烦。构造用户走统一的 `_new_user()`。换持久化后端后可移除此段。

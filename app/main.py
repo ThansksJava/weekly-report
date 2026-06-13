@@ -192,7 +192,8 @@ def _user_brief(u: User) -> dict[str, Any]:
         "email": u.email,
         "status": u.status,
         "created_at": u.created_at,
-        "report_count": len(store.list_reports(u.id)),
+        # 管理员仅能看到已提交周报,计数也只统计已提交的
+        "report_count": sum(1 for r in store.list_reports(u.id) if r.status == "submitted"),
     }
 
 
@@ -288,16 +289,19 @@ def admin_reject_user(uid: str, admin: User = Depends(current_admin)):
 @app.get("/api/admin/users/{uid}/reports")
 def admin_user_reports(uid: str, admin: User = Depends(current_admin)):
     _normal_user(uid)
+    # 仅返回已提交(submitted)的周报;暂存(draft)对管理员不可见
     return [
-        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end, "updated_at": r.updated_at}
-        for r in store.list_reports(uid)
+        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end,
+         "updated_at": r.updated_at, "submitted_at": r.submitted_at}
+        for r in store.list_reports(uid) if r.status == "submitted"
     ]
 
 
 @app.get("/api/admin/reports/{report_id}")
 def admin_get_report(report_id: str, admin: User = Depends(current_admin)):
     report = store.get_report(report_id)
-    if not report:
+    # 未提交的周报对管理员等同不存在
+    if not report or report.status != "submitted":
         raise HTTPException(status_code=404, detail="周报不存在")
     _normal_user(report.user_id)  # 仅允许查看普通用户的周报
     return report.to_dict()
@@ -397,7 +401,8 @@ def _fill_dates(text: str, start: str, end: str) -> str:
 @app.get("/api/reports")
 def list_reports(user: User = Depends(current_user)):
     return [
-        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end, "updated_at": r.updated_at}
+        {"id": r.id, "title": r.title, "week_start": r.week_start, "week_end": r.week_end,
+         "updated_at": r.updated_at, "status": r.status, "submitted_at": r.submitted_at}
         for r in store.list_reports(user.id)
     ]
 
@@ -466,6 +471,26 @@ def update_report(report_id: str, body: ReportIn, user: User = Depends(current_u
     report.updated_at = dt.datetime.now().isoformat(timespec="seconds")
     store.update_report(report)
     return {"ok": True, "updated_at": report.updated_at}
+
+
+@app.post("/api/reports/{report_id}/submit")
+def submit_report(report_id: str, user: User = Depends(current_user)):
+    """提交周报:状态置为 submitted,提交后管理员才能看到。"""
+    report = _owned_report(report_id, user)
+    report.status = "submitted"
+    report.submitted_at = _now()
+    store.update_report(report)
+    return {"ok": True, "status": report.status, "submitted_at": report.submitted_at}
+
+
+@app.post("/api/reports/{report_id}/withdraw")
+def withdraw_report(report_id: str, user: User = Depends(current_user)):
+    """撤回周报:状态回到 draft(暂存),管理员将不再可见。"""
+    report = _owned_report(report_id, user)
+    report.status = "draft"
+    report.submitted_at = ""
+    store.update_report(report)
+    return {"ok": True, "status": report.status}
 
 
 @app.delete("/api/reports/{report_id}")
