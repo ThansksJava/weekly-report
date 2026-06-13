@@ -7,6 +7,8 @@ let me = null;          // 当前用户
 let reports = [];       // 周报列表(摘要)
 let current = null;     // 当前编辑中的周报(完整对象)
 let optionSets = {};    // 用户选项集:名称 -> 候选值
+let templates = [];     // 用户的模板列表(含 id/name/title/greeting/subtitle/sections)
+let defaultTemplateId = ""; // 默认模板 id
 let dirty = false;
 let saveTimer = null;
 
@@ -70,7 +72,14 @@ async function showApp() {
   $("#user-name").textContent = me.display_name || me.username;
   $("#user-avatar").textContent = (me.display_name || me.username).slice(0, 1).toUpperCase();
   optionSets = await api("/api/options");
+  await loadTemplates();
   initDatePickers();
+}
+
+async function loadTemplates() {
+  const data = await api("/api/templates");
+  templates = data.templates || [];
+  defaultTemplateId = data.default_template_id || "";
 }
 
 /* ---------------- 日期组件(flatpickr) ---------------- */
@@ -152,6 +161,7 @@ async function refreshList(openFirst = false) {
 
 async function openReport(id) {
   if (dirty && current) await saveReport();
+  if (editingTemplateId) leaveTemplateMode();
   current = await api(`/api/reports/${id}`);
   renderReport();
   refreshListActive();
@@ -163,10 +173,40 @@ function refreshListActive() {
   });
 }
 
-$("#btn-new-report").addEventListener("click", async () => {
+$("#btn-new-report").addEventListener("click", () => {
+  const p = $("#tpl-picker");
+  if (!p.classList.contains("hidden")) { p.classList.add("hidden"); return; }
+  if (templates.length <= 1) { createReportWith(null); return; } // 只有一个模板时直接创建
+  renderTplPicker();
+  p.classList.remove("hidden");
+});
+
+function renderTplPicker() {
+  const p = $("#tpl-picker");
+  p.innerHTML = "";
+  for (const t of templates) {
+    const b = document.createElement("button");
+    b.className = "tpl-pick-item";
+    const name = document.createElement("span");
+    name.textContent = t.name;
+    b.appendChild(name);
+    if (t.id === defaultTemplateId) {
+      const badge = document.createElement("span");
+      badge.className = "tpl-badge";
+      badge.textContent = "默认";
+      b.appendChild(badge);
+    }
+    b.addEventListener("click", () => { p.classList.add("hidden"); createReportWith(t.id); });
+    p.appendChild(b);
+  }
+}
+
+async function createReportWith(templateId) {
   if (dirty && current) await saveReport();
+  if (editingTemplateId) leaveTemplateMode();
   try {
-    current = await api("/api/reports", { method: "POST" });
+    const q = templateId ? `?template_id=${encodeURIComponent(templateId)}` : "";
+    current = await api("/api/reports" + q, { method: "POST" });
   } catch (e) {
     toast(e.message);
     return;
@@ -174,7 +214,14 @@ $("#btn-new-report").addEventListener("click", async () => {
   await refreshList();
   renderReport();
   refreshListActive();
-  toast("已根据你的模板创建本周周报");
+  toast("已根据模板创建本周周报");
+}
+
+// 点击别处关闭模板选择浮层
+document.addEventListener("click", (e) => {
+  const p = $("#tpl-picker");
+  if (!p || p.classList.contains("hidden")) return;
+  if (!p.contains(e.target) && e.target !== $("#btn-new-report")) p.classList.add("hidden");
 });
 
 $("#btn-delete-report").addEventListener("click", async () => {
@@ -385,6 +432,19 @@ for (const [id, key] of [["r-title", "title"], ["r-greeting", "greeting"], ["r-s
 async function saveReport() {
   if (!current) return;
   clearTimeout(saveTimer);
+  if (editingTemplateId) {
+    await api(`/api/templates/${editingTemplateId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: editingTemplateName,
+        title: current.title, greeting: current.greeting, subtitle: current.subtitle,
+        sections: current.sections,
+      }),
+    });
+    await loadTemplates();
+    setDirty(false);
+    return;
+  }
   const body = {
     title: current.title, greeting: current.greeting, subtitle: current.subtitle,
     week_start: current.week_start, week_end: current.week_end,
@@ -404,10 +464,10 @@ document.addEventListener("keydown", (e) => {
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); } });
 
 /* ---------------- 存为模板 ---------------- */
-$("#btn-save-template").addEventListener("click", async () => {
-  if (!current) return;
+// 把当前周报结构(标题中的日期反向替换为占位符)打包成模板正文
+function currentAsTemplateBody() {
   const s = fmtDot(current.week_start), e = fmtDot(current.week_end);
-  const tpl = {
+  return {
     title: current.title.replaceAll(s, "{start}").replaceAll(e, "{end}"),
     greeting: current.greeting,
     subtitle: current.subtitle.replaceAll(s, "{start}").replaceAll(e, "{end}"),
@@ -416,8 +476,124 @@ $("#btn-save-template").addEventListener("click", async () => {
       rows: sec.rows.length ? sec.rows : [{}],
     })),
   };
-  await api("/api/template", { method: "PUT", body: JSON.stringify(tpl) });
-  toast("已保存为你的默认模板,新建周报时自动套用");
+}
+
+$("#btn-save-template").addEventListener("click", async () => {
+  if (!current) return;
+  const name = (prompt("模板名称(同名将覆盖该模板):", "我的模板") || "").trim();
+  if (!name) return;
+  const body = { name, ...currentAsTemplateBody() };
+  const existing = templates.find((t) => t.name === name);
+  try {
+    if (existing) {
+      await api(`/api/templates/${existing.id}`, { method: "PUT", body: JSON.stringify(body) });
+    } else {
+      await api("/api/templates", { method: "POST", body: JSON.stringify(body) });
+    }
+  } catch (err) { toast(err.message); return; }
+  await loadTemplates();
+  toast(existing ? `已更新模板「${name}」` : `已存为模板「${name}」,新建周报时可选用`);
+});
+
+/* ---------------- 模板管理弹窗 ---------------- */
+function renderTemplatesModal() {
+  const body = $("#templates-body");
+  body.innerHTML = "";
+  for (const t of templates) {
+    const box = document.createElement("div");
+    box.className = "tpl-row";
+
+    const nameInput = document.createElement("input");
+    nameInput.className = "tpl-name";
+    nameInput.value = t.name;
+    nameInput.addEventListener("change", async () => {
+      const nv = nameInput.value.trim();
+      if (!nv || nv === t.name) { nameInput.value = t.name; return; }
+      await api(`/api/templates/${t.id}`, { method: "PUT", body: JSON.stringify({
+        name: nv, title: t.title, greeting: t.greeting, subtitle: t.subtitle, sections: t.sections,
+      }) });
+      await loadTemplates(); renderTemplatesModal();
+      toast("已重命名");
+    });
+    box.appendChild(nameInput);
+
+    const tools = document.createElement("div");
+    tools.className = "tpl-row-tools";
+    tools.appendChild(miniBtn("修改", () => enterTemplateEdit(t)));
+    if (t.id === defaultTemplateId) {
+      const badge = document.createElement("span");
+      badge.className = "tpl-badge";
+      badge.textContent = "默认";
+      tools.appendChild(badge);
+    } else {
+      tools.appendChild(miniBtn("设为默认", async () => {
+        await api(`/api/templates/${t.id}/default`, { method: "POST" });
+        await loadTemplates(); renderTemplatesModal(); toast("已设为默认模板");
+      }));
+    }
+    tools.appendChild(miniBtn("删除", async () => {
+      if (!confirm(`删除模板「${t.name}」?`)) return;
+      try { await api(`/api/templates/${t.id}`, { method: "DELETE" }); }
+      catch (err) { toast(err.message); return; }
+      await loadTemplates(); renderTemplatesModal(); toast("已删除");
+    }, "danger"));
+    box.appendChild(tools);
+    body.appendChild(box);
+  }
+}
+
+/* ---------------- 模板编辑模式 ----------------
+   复用周报编辑器:把模板正文装进 current 当作"伪周报"编辑,
+   editingTemplateId 非空时保存路由到 /api/templates 而非 /api/reports。 */
+let editingTemplateId = null;
+let editingTemplateName = "";
+
+function enterTemplateEdit(t) {
+  closeTemplatesModal();
+  editingTemplateId = t.id;
+  editingTemplateName = t.name;
+  current = {
+    id: t.id,
+    title: t.title || "",
+    greeting: t.greeting || "",
+    subtitle: t.subtitle || "",
+    week_start: "",
+    week_end: "",
+    sections: JSON.parse(JSON.stringify(t.sections || [])),
+  };
+  document.body.classList.add("tpl-editing");
+  $("#tpl-edit-name").textContent = t.name;
+  $("#tpl-edit-bar").classList.remove("hidden");
+  renderReport();
+  refreshListActive();
+}
+
+// 仅清理模板编辑模式的 UI/状态,不触发保存或列表刷新
+function leaveTemplateMode() {
+  editingTemplateId = null;
+  document.body.classList.remove("tpl-editing");
+  $("#tpl-edit-bar").classList.add("hidden");
+}
+
+async function exitTemplateEdit() {
+  if (dirty && current) await saveReport(); // 模板模式下 saveReport 会写回模板
+  leaveTemplateMode();
+  current = null; dirty = false;
+  await refreshList(true);
+  toast("模板已保存");
+}
+$("#tpl-edit-done").addEventListener("click", exitTemplateEdit);
+
+function closeTemplatesModal() { $("#templates-modal").classList.add("hidden"); }
+$("#btn-templates").addEventListener("click", async () => {
+  await loadTemplates();
+  renderTemplatesModal();
+  $("#templates-modal").classList.remove("hidden");
+});
+$("#templates-close").addEventListener("click", closeTemplatesModal);
+$("#templates-close2").addEventListener("click", closeTemplatesModal);
+$("#templates-modal").addEventListener("click", (e) => {
+  if (e.target === $("#templates-modal")) closeTemplatesModal();
 });
 
 /* ---------------- 导出 ---------------- */

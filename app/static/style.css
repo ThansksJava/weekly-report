@@ -459,6 +459,71 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---------- 模板选择浮层(侧栏「新建本周周报」下) ---------- */
+.tpl-picker {
+  margin: -8px 16px 12px;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.tpl-pick-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; text-align: left;
+  padding: 9px 12px;
+  font: 500 13px var(--sans); color: var(--ink);
+  background: none; border: none; border-bottom: 1px solid var(--line);
+  cursor: pointer; transition: background .12s;
+}
+.tpl-pick-item:last-child { border-bottom: none; }
+.tpl-pick-item:hover { background: var(--accent-soft); }
+.tpl-badge {
+  font-size: 11px; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border-radius: 2px;
+  padding: 1px 7px; flex-shrink: 0;
+}
+
+/* ---------- 模板管理弹窗 ---------- */
+.tpl-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.tpl-row:last-child { border-bottom: none; }
+.tpl-name {
+  flex: 1; min-width: 0;
+  font: 500 14px var(--sans); color: var(--ink);
+  background: none; border: none; border-bottom: 1px solid transparent;
+  padding: 2px 0;
+}
+.tpl-name:hover { border-bottom-color: var(--line); }
+.tpl-name:focus { outline: none; border-bottom-color: var(--accent); }
+.tpl-row-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* ---------- 模板编辑模式 ---------- */
+.tpl-edit-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin: 0 0 16px; padding: 12px 18px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font: 13px/1.5 var(--sans); color: var(--ink);
+}
+.tpl-edit-bar code {
+  font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 2px;
+  padding: 0 4px;
+}
+.tpl-edit-bar .btn-primary { flex-shrink: 0; }
+/* 模板模式下隐藏与"周报实例"相关的操作 */
+body.tpl-editing #btn-export-png,
+body.tpl-editing #btn-export-xlsx,
+body.tpl-editing #btn-email,
+body.tpl-editing #btn-delete-report,
+body.tpl-editing #btn-save-template,
+body.tpl-editing #btn-templates,
+body.tpl-editing .week-range { display: none; }
+
 @media (max-width: 900px) {
   .login-art { display: none; }
   .report-sheet { padding: 28px 20px; }

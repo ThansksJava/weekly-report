@@ -19,7 +19,7 @@ from .export import report_to_xlsx
 from .importer import parse_xlsx
 from .models import Report, Section, User, new_id
 from .storage import DuplicateWeekError, MemoryStorage, Storage
-from .template import default_option_sets, default_template
+from .template import default_option_sets, default_templates, named_template
 
 app = FastAPI(title="Weekly Report System")
 store: Storage = MemoryStorage()  # 替换此行即可切换数据库后端
@@ -51,6 +51,7 @@ class ReportIn(BaseModel):
 
 
 class TemplateIn(BaseModel):
+    name: str = ""
     title: str = ""
     greeting: str = ""
     subtitle: str = ""
@@ -78,9 +79,10 @@ def register(body: RegisterIn, response: Response):
         password_hash=hash_password(body.password),
         display_name=body.display_name or body.username,
         email=body.email,
-        template=default_template(),
+        templates=default_templates(),
         option_sets=default_option_sets(),
     )
+    user.default_template_id = user.templates[0]["id"]
     store.create_user(user)
     token = new_token()
     store.set_session(token, user.id)
@@ -112,24 +114,71 @@ def me(user: User = Depends(current_user)):
     return {"id": user.id, "username": user.username, "display_name": user.display_name, "email": user.email}
 
 
-# ---------- 模板 ----------
-@app.get("/api/template")
-def get_template(user: User = Depends(current_user)):
-    return user.template or default_template()
+# ---------- 模板管理(每个用户可拥有多个命名模板) ----------
+def _ensure_templates(user: User) -> None:
+    """保证用户至少有一个模板,且 default_template_id 指向一个有效模板。"""
+    if not user.templates:
+        user.templates = default_templates()
+    ids = {t["id"] for t in user.templates}
+    if user.default_template_id not in ids:
+        user.default_template_id = user.templates[0]["id"]
 
 
-@app.put("/api/template")
-def save_template(body: TemplateIn, user: User = Depends(current_user)):
-    user.template = body.model_dump()
+def _find_template(user: User, tid: str) -> dict[str, Any] | None:
+    return next((t for t in user.templates if t.get("id") == tid), None)
+
+
+@app.get("/api/templates")
+def list_templates(user: User = Depends(current_user)):
+    _ensure_templates(user)
     store.update_user(user)
-    return {"ok": True}
+    return {"templates": user.templates, "default_template_id": user.default_template_id}
 
 
-@app.post("/api/template/reset")
-def reset_template(user: User = Depends(current_user)):
-    user.template = default_template()
+@app.post("/api/templates")
+def add_template(body: TemplateIn, user: User = Depends(current_user)):
+    _ensure_templates(user)
+    tpl = named_template(body.name or "未命名模板", body.model_dump())
+    user.templates.append(tpl)
     store.update_user(user)
-    return user.template
+    return tpl
+
+
+@app.put("/api/templates/{tid}")
+def save_template(tid: str, body: TemplateIn, user: User = Depends(current_user)):
+    _ensure_templates(user)
+    tpl = _find_template(user, tid)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="模板不存在")
+    data = body.model_dump()
+    tpl["name"] = data["name"] or tpl["name"]
+    for k in ("title", "greeting", "subtitle", "sections"):
+        tpl[k] = data[k]
+    store.update_user(user)
+    return tpl
+
+
+@app.delete("/api/templates/{tid}")
+def delete_template(tid: str, user: User = Depends(current_user)):
+    _ensure_templates(user)
+    if len(user.templates) <= 1:
+        raise HTTPException(status_code=400, detail="至少保留一个模板")
+    if not _find_template(user, tid):
+        raise HTTPException(status_code=404, detail="模板不存在")
+    user.templates = [t for t in user.templates if t["id"] != tid]
+    _ensure_templates(user)  # 删的若是默认模板,回退到首个
+    store.update_user(user)
+    return {"ok": True, "default_template_id": user.default_template_id}
+
+
+@app.post("/api/templates/{tid}/default")
+def set_default_template(tid: str, user: User = Depends(current_user)):
+    _ensure_templates(user)
+    if not _find_template(user, tid):
+        raise HTTPException(status_code=404, detail="模板不存在")
+    user.default_template_id = tid
+    store.update_user(user)
+    return {"ok": True, "default_template_id": tid}
 
 
 # ---------- 选项集(项目/优先级/级别/状态等) ----------
@@ -165,12 +214,15 @@ def list_reports(user: User = Depends(current_user)):
 
 
 @app.post("/api/reports")
-def create_report(user: User = Depends(current_user)):
+def create_report(template_id: str | None = None, user: User = Depends(current_user)):
+    _ensure_templates(user)
     today = dt.date.today()
     monday = today - dt.timedelta(days=today.weekday())
     friday = monday + dt.timedelta(days=4)
     start, end = monday.isoformat(), friday.isoformat()
-    tpl = copy.deepcopy(user.template or default_template())
+    chosen = _find_template(user, template_id) if template_id else None
+    chosen = chosen or _find_template(user, user.default_template_id) or user.templates[0]
+    tpl = copy.deepcopy(chosen)
     sections = [Section.from_dict(s) for s in tpl.get("sections", [])]
     for s in sections:
         s.id = new_id()
