@@ -50,6 +50,11 @@ class ReportIn(BaseModel):
     sections: list[dict[str, Any]] = []
 
 
+class NewReportIn(BaseModel):
+    # 指定周报所属周内的任意一天(ISO 日期);留空则取当前周
+    week_start: str = ""
+
+
 class TemplateIn(BaseModel):
     title: str = ""
     greeting: str = ""
@@ -165,9 +170,14 @@ def list_reports(user: User = Depends(current_user)):
 
 
 @app.post("/api/reports")
-def create_report(user: User = Depends(current_user)):
-    today = dt.date.today()
-    monday = today - dt.timedelta(days=today.weekday())
+def create_report(body: NewReportIn | None = None, user: User = Depends(current_user)):
+    base = dt.date.today()
+    if body and body.week_start:
+        try:
+            base = dt.date.fromisoformat(body.week_start)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="日期格式无效")
+    monday = base - dt.timedelta(days=base.weekday())
     friday = monday + dt.timedelta(days=4)
     start, end = monday.isoformat(), friday.isoformat()
     tpl = copy.deepcopy(user.template or default_template())
@@ -188,7 +198,7 @@ def create_report(user: User = Depends(current_user)):
     try:
         store.create_report(report)
     except DuplicateWeekError:
-        raise HTTPException(status_code=409, detail="本周周报已存在,请勿重复创建")
+        raise HTTPException(status_code=409, detail=f"已存在 {start} 当周的周报,请勿重复创建")
     return report.to_dict()
 
 

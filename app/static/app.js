@@ -163,18 +163,69 @@ function refreshListActive() {
   });
 }
 
-$("#btn-new-report").addEventListener("click", async () => {
+/* ---------------- 新建周报:选择所属周 ---------------- */
+let fpNew = null;
+
+// 由任意一天推算所属周的周一~周五(ISO)
+function weekRange(d) {
+  const day = (d.getDay() + 6) % 7; // 周一=0
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - day);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  return { start: iso(monday), end: iso(friday) };
+}
+
+function updateNewRange() {
+  const sel = fpNew && fpNew.selectedDates[0];
+  if (!sel) { $("#newreport-range").textContent = ""; return; }
+  const { start, end } = weekRange(sel);
+  $("#newreport-range").textContent = `将创建:${fmtDot(start)} – ${fmtDot(end)}`;
+}
+
+function openNewReportModal() {
+  if (!fpNew) {
+    fpNew = flatpickr("#newreport-date", {
+      dateFormat: "Y-m-d", locale: "zh", disableMobile: true,
+      onChange: updateNewRange,
+    });
+  }
+  fpNew.setDate(new Date(), false);
+  updateNewRange();
+  $("#newreport-modal").classList.remove("hidden");
+}
+
+function closeNewReportModal() {
+  $("#newreport-modal").classList.add("hidden");
+}
+
+$("#btn-new-report").addEventListener("click", openNewReportModal);
+$("#newreport-close").addEventListener("click", closeNewReportModal);
+$("#newreport-modal").addEventListener("click", (e) => {
+  if (e.target.id === "newreport-modal") closeNewReportModal();
+});
+$("#newreport-thisweek").addEventListener("click", () => {
+  fpNew.setDate(new Date(), false);
+  updateNewRange();
+});
+
+$("#newreport-create").addEventListener("click", async () => {
+  const sel = fpNew && fpNew.selectedDates[0];
+  if (!sel) { toast("请选择日期"); return; }
+  const week_start = weekRange(sel).start;
   if (dirty && current) await saveReport();
   try {
-    current = await api("/api/reports", { method: "POST" });
+    current = await api("/api/reports", { method: "POST", body: JSON.stringify({ week_start }) });
   } catch (e) {
     toast(e.message);
     return;
   }
+  closeNewReportModal();
   await refreshList();
   renderReport();
   refreshListActive();
-  toast("已根据你的模板创建本周周报");
+  toast("已根据你的模板创建周报");
 });
 
 $("#btn-delete-report").addEventListener("click", async () => {

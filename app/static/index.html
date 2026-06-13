@@ -60,7 +60,7 @@
       <span class="brand-mark small">W</span>
       <span class="sidebar-title">周报</span>
     </div>
-    <button class="btn-new" id="btn-new-report">+ 新建本周周报</button>
+    <button class="btn-new" id="btn-new-report">+ 新建周报</button>
     <button class="btn-import" id="btn-import">↑ 导入历史周报 (.xlsx)</button>
     <input type="file" id="import-file" accept=".xlsx" class="hidden">
     <nav class="report-list" id="report-list"></nav>
@@ -130,6 +130,27 @@
         <button class="mini-btn" id="newset-add">+ 添加选项集</button>
       </div>
       <button class="btn-primary slim" id="options-save">保 存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新建周报:选择所属周 -->
+<div class="modal-mask hidden" id="newreport-modal">
+  <div class="modal slim-modal">
+    <div class="modal-head">
+      <h3>新建周报</h3>
+      <p class="modal-sub">选择目标周内任意一天,系统将自动按周一至周五创建</p>
+      <button class="modal-x" id="newreport-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="newreport-row">
+        <input type="text" id="newreport-date" class="date-input" placeholder="选择日期" readonly>
+        <button class="mini-btn" id="newreport-thisweek">本周</button>
+      </div>
+      <p class="newreport-range" id="newreport-range"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary slim" id="newreport-create">创 建</button>
     </div>
   </div>
 </div>
