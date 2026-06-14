@@ -68,19 +68,44 @@ class ReviewTest(unittest.TestCase):
         m.submit_report(self.rid, user=self.user)
         out = m.admin_approve_report(self.rid, ReviewIn(reason="OK"), admin=self.admin)
         self.assertEqual(out["review_status"], "approved")
-        # 通过后不可编辑
+        # 通过后不可直接编辑
         with self.assertRaises(HTTPException) as ctx:
             m.update_report(self.rid, _report_in(self.rep), user=self.user)
         self.assertEqual(ctx.exception.status_code, 409)
-        # 重新编辑 -> draft
-        out = m.reopen_report(self.rid, user=self.user)
+        # 已通过不能直接 reopen,只能「申请修改」-> reopen_pending(仍锁定)
+        out = m.request_reopen(self.rid, ReviewIn(reason="补一行"), user=self.user)
+        self.assertEqual(out["review_status"], "reopen_pending")
+        with self.assertRaises(HTTPException) as ctx:
+            m.update_report(self.rid, _report_in(self.rep), user=self.user)
+        self.assertEqual(ctx.exception.status_code, 409)
+        # 管理员同意修改 -> draft,此后可编辑
+        out = m.admin_approve_report(self.rid, ReviewIn(), admin=self.admin)
         self.assertEqual(out["review_status"], "draft")
-        m.update_report(self.rid, _report_in(self.rep), user=self.user)  # 现在可编辑
+        self.assertEqual(out["review_history"][-1]["action"], "reopen_approve")
+        m.update_report(self.rid, _report_in(self.rep), user=self.user)
 
-    def test_withdraw(self):
+    def test_request_reopen_rejected_stays_approved(self):
         m.submit_report(self.rid, user=self.user)
-        out = m.withdraw_report(self.rid, user=self.user)
-        self.assertEqual(out["review_status"], "draft")
+        m.admin_approve_report(self.rid, ReviewIn(), admin=self.admin)
+        m.request_reopen(self.rid, ReviewIn(), user=self.user)
+        out = m.admin_reject_report(self.rid, ReviewIn(reason="本周已截止"), admin=self.admin)
+        self.assertEqual(out["review_status"], "approved")  # 驳回 -> 维持已通过锁定
+        self.assertEqual(out["review_history"][-1]["action"], "reopen_reject")
+
+    def test_request_reopen_only_when_approved(self):
+        with self.assertRaises(HTTPException) as ctx:  # draft 不能申请修改
+            m.request_reopen(self.rid, ReviewIn(), user=self.user)
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_withdraw_pending_and_reopen_request(self):
+        # pending -> draft
+        m.submit_report(self.rid, user=self.user)
+        self.assertEqual(m.withdraw_report(self.rid, user=self.user)["review_status"], "draft")
+        # reopen_pending -> approved(撤回修改申请)
+        m.submit_report(self.rid, user=self.user)
+        m.admin_approve_report(self.rid, ReviewIn(), admin=self.admin)
+        m.request_reopen(self.rid, ReviewIn(), user=self.user)
+        self.assertEqual(m.withdraw_report(self.rid, user=self.user)["review_status"], "approved")
 
     def test_approve_non_pending_409(self):
         with self.assertRaises(HTTPException) as ctx:  # 仍是 draft
@@ -103,6 +128,18 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(out["skipped"], ["nope"])
         self.assertEqual(m.store.get_report(self.rid).review_status, "approved")
         self.assertEqual(m.admin_pending_reports(admin=self.admin), [])
+
+    def test_reopen_request_in_queue_with_kind(self):
+        m.submit_report(self.rid, user=self.user)
+        m.admin_approve_report(self.rid, ReviewIn(), admin=self.admin)
+        m.request_reopen(self.rid, ReviewIn(), user=self.user)
+        queue = m.admin_pending_reports(admin=self.admin)
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(queue[0]["kind"], "reopen")
+        # 批量「同意」修改申请 -> draft
+        out = m.admin_batch_review(BatchReviewIn(ids=[self.rid], action="approve", reason=""), admin=self.admin)
+        self.assertEqual(out["done"], [self.rid])
+        self.assertEqual(m.store.get_report(self.rid).review_status, "draft")
 
 
 if __name__ == "__main__":

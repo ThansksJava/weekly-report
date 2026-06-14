@@ -1,11 +1,16 @@
 """周报系统 API 入口。
 
-存储后端在此装配:替换 MemoryStorage 为其他 Storage 实现即可切换数据库。
+存储后端在此装配:由环境变量 WR_DATABASE_URL 决定。
+  - 未设置 → MemoryStorage(内存,重启丢数据;测试与快速开发用)
+  - 已设置 → SqlStorage(SQLAlchemy,持久化),如:
+        sqlite:///./data/weekly_report.db
+        postgresql+psycopg://user:pw@host:5432/wr
 """
 from __future__ import annotations
 
 import copy
 import datetime as dt
+import os
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +26,17 @@ from .models import Report, Section, User, new_id
 from .storage import DuplicateWeekError, MemoryStorage, Storage
 from .template import default_option_sets, default_templates, named_template
 
+
+def _make_storage() -> Storage:
+    url = os.environ.get("WR_DATABASE_URL", "").strip()
+    if url:
+        from .storage import SqlStorage  # 惰性导入,未配 DB 时无需 SQLAlchemy
+        return SqlStorage(url)
+    return MemoryStorage()
+
+
 app = FastAPI(title="Weekly Report System")
-store: Storage = MemoryStorage()  # 替换此行即可切换数据库后端
+store: Storage = _make_storage()
 
 STATIC_DIR = Path(__file__).parent / "static"
 COOKIE = "wr_session"        # 普通用户会话 cookie
@@ -307,19 +321,32 @@ def admin_user_reports(uid: str, admin: User = Depends(current_admin)):
     ]
 
 
-def _last_submit_at(report: Report) -> str:
-    """取最近一次提交(submit)的时间,用于待审批队列排序/展示。"""
-    subs = [e for e in report.review_history if e.get("action") == "submit"]
-    return subs[-1]["at"] if subs else report.updated_at
+_REVIEWABLE = ("pending", "reopen_pending")
+
+
+def _last_request_at(report: Report) -> str:
+    """取最近一次待审动作(提交 / 申请修改)的时间,用于待审队列排序/展示。"""
+    evs = [e for e in report.review_history if e.get("action") in ("submit", "reopen_request")]
+    return evs[-1]["at"] if evs else report.updated_at
 
 
 def _apply_review(report: Report, action: str, admin: User, reason: str) -> None:
-    """对 pending 周报执行审批(通过/拒绝);非 pending 抛 409。"""
-    if report.review_status != "pending":
+    """审批待审周报:
+    - pending(新提交):approve→approved,reject→rejected
+    - reopen_pending(修改申请):approve→draft(放开编辑),reject→approved(驳回,维持锁定)
+    其余状态抛 409。
+    """
+    if report.review_status not in _REVIEWABLE:
         raise HTTPException(status_code=409, detail="该周报当前不可审批")
     actor = admin.display_name or admin.username
-    report.review_history.append(_review_event(action, actor, "admin", reason=reason))
-    report.review_status = "approved" if action == "approve" else "rejected"
+    if report.review_status == "pending":
+        ev_action = action  # approve | reject
+        new_status = "approved" if action == "approve" else "rejected"
+    else:  # reopen_pending
+        ev_action = "reopen_approve" if action == "approve" else "reopen_reject"
+        new_status = "draft" if action == "approve" else "approved"
+    report.review_history.append(_review_event(ev_action, actor, "admin", reason=reason))
+    report.review_status = new_status
     store.update_report(report)
 
 
@@ -330,12 +357,14 @@ def admin_pending_reports(admin: User = Depends(current_admin)):
         if u.role != "user":
             continue
         for r in store.list_reports(u.id):
-            if r.review_status == "pending":
+            if r.review_status in _REVIEWABLE:
                 items.append({
                     "id": r.id, "user_id": u.id, "username": u.username,
                     "display_name": u.display_name, "title": r.title,
                     "week_start": r.week_start, "week_end": r.week_end,
-                    "submitted_at": _last_submit_at(r),
+                    "submitted_at": _last_request_at(r),
+                    # kind: submit=新提交待审 | reopen=修改申请待审
+                    "kind": "reopen" if r.review_status == "reopen_pending" else "submit",
                 })
     items.sort(key=lambda x: x["submitted_at"])
     return items
@@ -369,7 +398,7 @@ def admin_batch_review(body: BatchReviewIn, admin: User = Depends(current_admin)
     for rid in body.ids:
         report = store.get_report(rid)
         target = store.get_user(report.user_id) if report else None
-        if not report or not target or target.role != "user" or report.review_status != "pending":
+        if not report or not target or target.role != "user" or report.review_status not in _REVIEWABLE:
             skipped.append(rid)
             continue
         _apply_review(report, body.action, admin, body.reason)
@@ -589,24 +618,31 @@ def submit_report(report_id: str, user: User = Depends(current_user)):
 
 @app.post("/api/reports/{report_id}/withdraw")
 def withdraw_report(report_id: str, user: User = Depends(current_user)):
+    """撤回:待审核(pending)→ 草稿;修改申请(reopen_pending)→ 退回已通过。"""
     report = _owned_report(report_id, user)
-    if report.review_status != "pending":
-        raise HTTPException(status_code=409, detail="仅待审核的周报可撤回")
     actor = user.display_name or user.username
-    report.review_history.append(_review_event("withdraw", actor, "user"))
-    report.review_status = "draft"
+    if report.review_status == "pending":
+        report.review_history.append(_review_event("withdraw", actor, "user"))
+        report.review_status = "draft"
+    elif report.review_status == "reopen_pending":
+        report.review_history.append(_review_event("reopen_cancel", actor, "user"))
+        report.review_status = "approved"
+    else:
+        raise HTTPException(status_code=409, detail="当前状态不能撤回")
     store.update_report(report)
     return report.to_dict()
 
 
-@app.post("/api/reports/{report_id}/reopen")
-def reopen_report(report_id: str, user: User = Depends(current_user)):
+@app.post("/api/reports/{report_id}/request-reopen")
+def request_reopen(report_id: str, body: ReviewIn | None = None, user: User = Depends(current_user)):
+    """已通过的周报申请重新修改:进入 reopen_pending,需管理员同意后才能编辑。"""
     report = _owned_report(report_id, user)
     if report.review_status != "approved":
-        raise HTTPException(status_code=409, detail="仅已通过的周报可重新编辑")
+        raise HTTPException(status_code=409, detail="仅已通过的周报可申请修改")
     actor = user.display_name or user.username
-    report.review_history.append(_review_event("reopen", actor, "user"))
-    report.review_status = "draft"
+    reason = body.reason if body else ""
+    report.review_history.append(_review_event("reopen_request", actor, "user", reason=reason))
+    report.review_status = "reopen_pending"
     store.update_report(report)
     return report.to_dict()
 

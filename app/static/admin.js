@@ -31,9 +31,12 @@ function esc(s) {
 }
 
 const STATUS_LABEL = { pending: "待审核", approved: "已通过", rejected: "已拒绝" };
-const REVIEW_LABEL = { draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝" };
+const REVIEW_LABEL = {
+  draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝", reopen_pending: "修改待审",
+};
 const ACTION_LABEL = {
-  submit: "提交审核", withdraw: "撤回提交", approve: "审核通过", reject: "审核拒绝", reopen: "重新编辑",
+  submit: "提交审核", withdraw: "撤回提交", approve: "审核通过", reject: "审核拒绝",
+  reopen_request: "申请修改", reopen_approve: "同意修改", reopen_reject: "驳回修改申请", reopen_cancel: "撤回修改申请",
 };
 
 let pending = [];  // 待审批周报队列
@@ -222,17 +225,21 @@ function renderPending() {
   tbody.innerHTML = "";
   $("#pending-all").checked = false;
   for (const p of pending) {
+    const isReopen = p.kind === "reopen";
+    const kindTag = isReopen
+      ? `<span class="badge mini badge-reopen_pending">修改申请</span>`
+      : `<span class="badge mini badge-pending">新提交</span>`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="chk"><input type="checkbox" class="pchk" value="${p.id}"></td>
       <td class="c-user">${esc(p.display_name || p.username)} <span class="c-sub">@${esc(p.username)}</span></td>
-      <td>${fmtDot(p.week_start)} – ${fmtDot(p.week_end)}</td>
+      <td>${kindTag} ${fmtDot(p.week_start)} – ${fmtDot(p.week_end)}</td>
       <td class="c-date">${(p.submitted_at || "").replace("T", " ")}</td>
       <td class="ops"><div class="ops-wrap"></div></td>`;
     const ops = tr.querySelector(".ops-wrap");
     ops.appendChild(opBtn("查看", () => viewPending(p)));
-    ops.appendChild(opBtn("通过", () => reviewOne(p.id, "approve"), "ok"));
-    ops.appendChild(opBtn("拒绝", () => reviewOne(p.id, "reject"), "danger"));
+    ops.appendChild(opBtn(isReopen ? "同意" : "通过", () => reviewOne(p.id, "approve"), "ok"));
+    ops.appendChild(opBtn(isReopen ? "驳回" : "拒绝", () => reviewOne(p.id, "reject"), "danger"));
     tbody.appendChild(tr);
   }
 }
@@ -345,13 +352,14 @@ async function showReport(rid) {
   catch (e) { $("#reports-view").innerHTML = `<p class="admin-empty">${esc(e.message)}</p>`; return; }
   currentRep = rep;
   const st = rep.review_status || "draft";
-  const canReview = st === "pending";
+  const isReopen = st === "reopen_pending";
+  const canReview = st === "pending" || isReopen;
   let head = `<div class="ro-toolbar">
     <span class="badge badge-${st}">${REVIEW_LABEL[st] || st}</span>
     <button class="op-btn" id="fs-open">⛶ 全屏查看</button>`;
   if (canReview) {
-    head += `<button class="op-btn ok" id="rv-approve">通过</button>
-             <button class="op-btn danger" id="rv-reject">拒绝</button>`;
+    head += `<button class="op-btn ok" id="rv-approve">${isReopen ? "同意修改" : "通过"}</button>
+             <button class="op-btn danger" id="rv-reject">${isReopen ? "驳回" : "拒绝"}</button>`;
   }
   head += `</div>`;
   $("#reports-view").innerHTML = head + renderReviewHistory(rep) + renderReportHTML(rep);
