@@ -16,5 +16,10 @@ __pycache__/
 /tmp/
 *.log
 
+# 数据库(SqlStorage 的 SQLite 文件)
+/data/
+*.db
+*.sqlite3
+
 # 并行开发 worktree
 /trees/

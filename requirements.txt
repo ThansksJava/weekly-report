@@ -2,3 +2,6 @@ fastapi>=0.115
 uvicorn>=0.30
 openpyxl>=3.1
 python-multipart>=0.0.9
+SQLAlchemy>=2.0
+# PostgreSQL 后端额外需要(SQLite 用 Python 内置驱动,默认不装):
+# psycopg[binary]>=3.1
