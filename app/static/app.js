@@ -279,7 +279,7 @@ $("#btn-delete-report").addEventListener("click", async () => {
 // 审核中/已通过的周报锁定为只读
 function isLocked() {
   return !editingTemplateId && current &&
-    (current.review_status === "pending" || current.review_status === "approved");
+    ["pending", "approved", "reopen_pending"].includes(current.review_status);
 }
 
 function renderReport() {
@@ -521,9 +521,12 @@ document.addEventListener("keydown", (e) => {
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); } });
 
 /* ---------------- 审批工作流 ---------------- */
-const REVIEW_LABEL = { draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝" };
+const REVIEW_LABEL = {
+  draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝", reopen_pending: "修改待审",
+};
 const ACTION_LABEL = {
-  submit: "提交审核", withdraw: "撤回提交", approve: "审核通过", reject: "审核拒绝", reopen: "重新编辑",
+  submit: "提交审核", withdraw: "撤回提交", approve: "审核通过", reject: "审核拒绝",
+  reopen_request: "申请修改", reopen_approve: "同意修改", reopen_reject: "驳回修改申请", reopen_cancel: "撤回修改申请",
 };
 
 function esc(s) {
@@ -557,7 +560,10 @@ function updateReviewUI() {
 
   show("btn-submit-review", st === "draft" || st === "rejected");
   $("#btn-submit-review").textContent = st === "rejected" ? "重新提交审核" : "提交审核";
-  show("btn-withdraw", st === "pending");
+  // 撤回:待审核 / 修改申请待审 都可撤回
+  show("btn-withdraw", st === "pending" || st === "reopen_pending");
+  $("#btn-withdraw").textContent = st === "reopen_pending" ? "撤回申请" : "撤回";
+  // 已通过 → 申请修改(需管理员同意);修改待审时按钮隐藏(改走「撤回申请」)
   show("btn-reopen", st === "approved");
   show("btn-history", current.review_history.length > 0);
 
@@ -573,7 +579,10 @@ function updateReviewUI() {
     bar.innerHTML = `<span>已提交,<b>等待管理员审核</b>。审核期间不可编辑,如需修改请先「撤回」。</span>`;
   } else if (st === "approved") {
     bar.classList.add("approved");
-    bar.innerHTML = `<span><b>已通过审核</b>,周报已锁定。如需修改请点工具栏「重新编辑」退回草稿。</span>`;
+    bar.innerHTML = `<span><b>已通过审核</b>,周报已锁定。如需修改请点工具栏「申请修改」,<b>管理员同意后</b>方可再次编辑。</span>`;
+  } else if (st === "reopen_pending") {
+    bar.classList.add("pending");
+    bar.innerHTML = `<span>已提交<b>修改申请</b>,等待管理员审批。期间周报仍锁定;可点「撤回申请」取消。</span>`;
   } else {
     bar.classList.add("hidden");
   }
@@ -592,8 +601,14 @@ async function doReviewAction(path, okMsg) {
 }
 
 $("#btn-submit-review").addEventListener("click", () => doReviewAction("submit", "已提交审核"));
-$("#btn-withdraw").addEventListener("click", () => doReviewAction("withdraw", "已撤回,可继续编辑"));
-$("#btn-reopen").addEventListener("click", () => doReviewAction("reopen", "已退回草稿,可继续编辑"));
+$("#btn-withdraw").addEventListener("click", () => {
+  const msg = current && current.review_status === "reopen_pending" ? "已撤回修改申请" : "已撤回,可继续编辑";
+  doReviewAction("withdraw", msg);
+});
+$("#btn-reopen").addEventListener("click", () => {
+  if (!confirm("向管理员申请修改本周报?管理员同意后才能再次编辑。")) return;
+  doReviewAction("request-reopen", "已提交修改申请,等待管理员审批");
+});
 
 /* ---- 审核历史弹窗 ---- */
 $("#btn-history").addEventListener("click", openHistory);
@@ -803,25 +818,9 @@ $("#templates-modal").addEventListener("click", (e) => {
 /* ---------------- 导出 ---------------- */
 $("#btn-export-xlsx").addEventListener("click", async () => {
   if (!current) return;
-  await saveReport();
+  // 锁定状态(待审/已通过/修改待审)不能 PUT,跳过保存直接导出已存内容
+  if (dirty && !isLocked()) await saveReport();
   window.location.href = `/api/reports/${current.id}/xlsx`;
-});
-
-$("#btn-export-png").addEventListener("click", async () => {
-  if (!current) return;
-  await saveReport();
-  const sheet = $("#report-canvas");
-  sheet.classList.add("exporting");
-  try {
-    const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: "#fffdf9" });
-    const a = document.createElement("a");
-    a.download = `weekly-report-${current.week_start}.png`;
-    a.href = canvas.toDataURL("image/png");
-    a.click();
-    toast("图片已导出");
-  } finally {
-    sheet.classList.remove("exporting");
-  }
 });
 
 /* ---------------- 邮件 ---------------- */

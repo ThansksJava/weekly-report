@@ -291,13 +291,6 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 }
 .add-section:hover { color: var(--accent); border-color: var(--accent); }
 
-/* 导出图片时隐藏交互元素 */
-.exporting .no-export, .exporting .col-x, .exporting .row-x,
-.exporting .section-tools, .exporting .row-add, .exporting .week-range { display: none !important; }
-.exporting .sheet-head input, .exporting .section-name { border-bottom-color: transparent !important; }
-.exporting .cell-select { background-image: none; }
-.exporting .cell-select.empty { color: transparent; }
-
 /* ---------- 下拉单元格 ---------- */
 .cell-select {
   display: block; width: 100%; min-height: 36px;
@@ -529,7 +522,6 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 }
 .tpl-edit-bar .btn-primary { flex-shrink: 0; }
 /* 模板模式下隐藏与"周报实例"相关的操作 */
-body.tpl-editing #btn-export-png,
 body.tpl-editing #btn-export-xlsx,
 body.tpl-editing #btn-email,
 body.tpl-editing #btn-delete-report,
@@ -636,6 +628,7 @@ body.report-locked .i-subtitle { cursor: default; }
 .badge-approved { background: #e3ede3; color: #2f6d3a; }
 .badge-pending { background: var(--accent); color: #fff; }
 .badge-rejected { background: #e9e6df; color: var(--ink-faint); }
+.badge-reopen_pending { background: #fbf3e3; color: #8a6d1f; }
 
 .admin-table th.ops, .admin-table td.ops { width: 1%; white-space: nowrap; }
 .ops-wrap { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; }
