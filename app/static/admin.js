@@ -105,8 +105,10 @@ function renderUsers() {
       <td class="c-email">${esc(u.email) || "—"}</td>
       <td><span class="badge badge-${u.status}">${STATUS_LABEL[u.status] || u.status}</span></td>
       <td class="c-date">${(u.created_at || "").replace("T", " ")}</td>
-      <td class="num">${u.report_count}</td>
+      <td class="num">${u.report_count ? `<button class="rc-link" title="查看周报">${u.report_count}</button>` : u.report_count}</td>
       <td class="ops"><div class="ops-wrap"></div></td>`;
+    const rcLink = tr.querySelector(".rc-link");
+    if (rcLink) rcLink.addEventListener("click", () => openReports(u));
     const ops = tr.querySelector(".ops-wrap");
     if (u.status === "pending") {
       ops.appendChild(opBtn("通过", () => approve(u), "ok"));

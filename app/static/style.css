@@ -685,6 +685,19 @@ body.report-locked .i-subtitle { cursor: default; }
   white-space: nowrap;
 }
 .admin-table th.num, .admin-table td.num { text-align: center; }
+.rc-link {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rc-link:hover { background: #fbeae6; }
 .admin-table tbody td { padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: middle; }
 .admin-table tbody tr:last-child td { border-bottom: none; }
 .admin-table tbody tr:hover { background: rgba(28,39,66,.02); }
