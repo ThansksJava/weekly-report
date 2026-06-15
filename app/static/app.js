@@ -286,16 +286,18 @@ function renderReport() {
   if (!current) return;
   $("#empty-state").classList.add("hidden");
   $("#report-canvas").classList.remove("hidden");
-  $("#r-title").value = current.title;
-  $("#r-greeting").value = current.greeting;
-  $("#r-subtitle").value = current.subtitle;
+  // 顶部三字段为富文本(已净化的 HTML)
+  $("#r-title").innerHTML = current.title || "";
+  $("#r-greeting").innerHTML = current.greeting || "";
+  $("#r-subtitle").innerHTML = current.subtitle || "";
   if (fpStart) fpStart.setDate(current.week_start, false);
   if (fpEnd) fpEnd.setDate(current.week_end, false);
   setDirty(false);
 
   const locked = isLocked();
   document.body.classList.toggle("report-locked", locked);
-  $("#r-title").disabled = $("#r-greeting").disabled = $("#r-subtitle").disabled = locked;
+  ["r-title", "r-greeting", "r-subtitle"].forEach((id) => ($("#" + id).contentEditable = String(!locked)));
+  if (locked) hideRichToolbar();
 
   const host = $("#sections");
   host.innerHTML = "";
@@ -476,14 +478,63 @@ $("#btn-add-section").addEventListener("click", () => {
   renderReport();
 });
 
-// 顶部字段绑定(日期由 flatpickr 单独处理)
-for (const [id, key] of [["r-title", "title"], ["r-greeting", "greeting"], ["r-subtitle", "subtitle"]]) {
-  $("#" + id).addEventListener("input", (e) => {
+// 顶部富文本字段绑定(日期由 flatpickr 单独处理)
+const RICH_FIELDS = [["r-title", "title"], ["r-greeting", "greeting"], ["r-subtitle", "subtitle"]];
+for (const [id, key] of RICH_FIELDS) {
+  const el = $("#" + id);
+  el.addEventListener("input", () => {
     if (!current) return;
-    current[key] = e.target.value;
+    current[key] = el.innerHTML;
     setDirty(true);
   });
+  el.addEventListener("focus", () => { if (!isLocked()) showRichToolbar(el); });
+  el.addEventListener("blur", () => scheduleHideToolbar());
 }
+
+/* ---------------- 富文本工具条 ---------------- */
+let activeRichEl = null;
+let hideToolbarTimer = null;
+
+function showRichToolbar() {
+  clearTimeout(hideToolbarTimer);
+  activeRichEl = document.activeElement;
+  $("#rich-toolbar").classList.remove("hidden");
+}
+function hideRichToolbar() {
+  $("#rich-toolbar").classList.add("hidden");
+  activeRichEl = null;
+}
+function scheduleHideToolbar() {
+  // 延迟隐藏:点击工具条按钮时不应立即收起
+  hideToolbarTimer = setTimeout(() => {
+    const a = document.activeElement;
+    if (!a || !a.classList || !a.classList.contains("rich")) hideRichToolbar();
+  }, 200);
+}
+
+function execRich(cmd, value = null) {
+  if (!activeRichEl) return;
+  activeRichEl.focus();
+  try { document.execCommand("styleWithCSS", false, true); } catch {}
+  document.execCommand(cmd, false, value);
+  // 同步回 current
+  const id = activeRichEl.id;
+  const pair = RICH_FIELDS.find((p) => p[0] === id);
+  if (pair && current) { current[pair[1]] = activeRichEl.innerHTML; setDirty(true); }
+}
+
+(function initRichToolbar() {
+  const bar = $("#rich-toolbar");
+  // 按钮 mousedown 时阻止默认,保住编辑区选区
+  bar.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".rt-btn, .rt-color, .rt-size")) e.preventDefault();
+  });
+  bar.querySelectorAll(".rt-btn").forEach((b) => {
+    b.addEventListener("click", () => execRich(b.dataset.cmd));
+  });
+  $("#rt-color").addEventListener("input", (e) => execRich("foreColor", e.target.value));
+  $("#rt-size").addEventListener("change", (e) => execRich("fontSize", e.target.value));
+})();
 
 /* ---------------- 保存 ---------------- */
 async function saveReport() {
@@ -657,10 +708,11 @@ function openSnapshot(ev) {
 }
 
 // 只读渲染一份内容快照(title/greeting/subtitle/sections)
+// 顶部三字段为已净化富文本,直接输出 HTML(不再 esc)
 function renderSnapshotHTML(snap) {
-  let h = `<div class="ro-sheet"><div class="ro-title">${esc(snap.title)}</div>`;
-  if (snap.greeting) h += `<div class="ro-greeting">${esc(snap.greeting)}</div>`;
-  if (snap.subtitle) h += `<div class="ro-subtitle">${esc(snap.subtitle)}</div>`;
+  let h = `<div class="ro-sheet"><div class="ro-title">${snap.title || ""}</div>`;
+  if (snap.greeting) h += `<div class="ro-greeting">${snap.greeting}</div>`;
+  if (snap.subtitle) h += `<div class="ro-subtitle">${snap.subtitle}</div>`;
   for (const sec of snap.sections || []) {
     h += `<div class="ro-section-name">${esc(sec.name)}</div><div class="ro-table-scroll"><table class="ro-table"><thead><tr>`;
     if (sec.show_index) h += `<th class="ro-idx">No.</th>`;
@@ -832,9 +884,10 @@ function buildEmailHtml() {
   const td = 'border:1px solid #333;padding:6px 8px;vertical-align:top;font-size:13px;';
   const th = td + 'background:#d9d9d9;font-weight:bold;text-align:center;';
   let html = `<div style="font-family:'Microsoft YaHei',Arial,sans-serif;color:#1c2742;">`;
-  html += `<p style="font-size:16px;font-weight:bold;">${esc(current.title)}</p>`;
-  html += `<p>${esc(current.greeting)}</p>`;
-  html += `<p style="font-weight:bold;">${esc(current.subtitle)}</p>`;
+  // 顶部三字段为已净化富文本,直接输出(保留用户自定义样式)
+  html += `<div style="font-size:16px;font-weight:bold;">${current.title || ""}</div>`;
+  html += `<div>${current.greeting || ""}</div>`;
+  html += `<div style="font-weight:bold;">${current.subtitle || ""}</div>`;
   for (const sec of current.sections) {
     if (sec.name) html += `<p style="font-size:14px;font-weight:bold;margin:14px 0 6px;">${esc(sec.name)}</p>`;
     html += `<table style="border-collapse:collapse;width:100%;"><tr>`;

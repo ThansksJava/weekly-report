@@ -8,6 +8,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from .models import Report
+from .sanitize import html_to_text
 
 THIN = Side(style="thin", color="333333")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -21,12 +22,16 @@ def report_to_xlsx(report: Report) -> bytes:
     ws = wb.active
     ws.title = "Weekly Report"
 
+    # 顶部三字段为富文本 HTML,导出降级为带换行的纯文本
     row = 1
-    ws.cell(row=row, column=1, value=report.title).font = Font(size=14, bold=True)
+    c = ws.cell(row=row, column=1, value=html_to_text(report.title))
+    c.font = Font(size=14, bold=True); c.alignment = WRAP
     row += 2
-    ws.cell(row=row, column=1, value=report.greeting).font = Font(size=11)
+    c = ws.cell(row=row, column=1, value=html_to_text(report.greeting))
+    c.font = Font(size=11); c.alignment = WRAP
     row += 1
-    ws.cell(row=row, column=1, value=report.subtitle).font = Font(size=12, bold=True)
+    c = ws.cell(row=row, column=1, value=html_to_text(report.subtitle))
+    c.font = Font(size=12, bold=True); c.alignment = WRAP
     row += 2
 
     max_cols = 1

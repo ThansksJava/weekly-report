@@ -105,17 +105,36 @@
         <p class="empty-sub">点击左侧「新建周报」开始</p>
       </div>
 
+      <!-- 富文本工具条:聚焦标题/问候语/副标题时显示 -->
+      <div class="rich-toolbar no-export hidden" id="rich-toolbar">
+        <button type="button" class="rt-btn" data-cmd="bold" title="加粗"><b>B</b></button>
+        <button type="button" class="rt-btn" data-cmd="italic" title="斜体"><i>I</i></button>
+        <button type="button" class="rt-btn" data-cmd="underline" title="下划线"><u>U</u></button>
+        <span class="rt-sep"></span>
+        <label class="rt-color" title="字体颜色">A<input type="color" id="rt-color" value="#1c2742"></label>
+        <select class="rt-size" id="rt-size" title="字号">
+          <option value="2">小</option>
+          <option value="3" selected>正常</option>
+          <option value="5">大</option>
+          <option value="6">特大</option>
+        </select>
+        <span class="rt-sep"></span>
+        <button type="button" class="rt-btn" data-cmd="justifyLeft" title="左对齐">⇤</button>
+        <button type="button" class="rt-btn" data-cmd="justifyCenter" title="居中">≡</button>
+        <button type="button" class="rt-btn" data-cmd="justifyRight" title="右对齐">⇥</button>
+      </div>
+
       <article class="report-sheet hidden" id="report-canvas">
         <header class="sheet-head">
-          <input class="i-title" id="r-title" placeholder="周报标题">
+          <div class="i-title rich" id="r-title" contenteditable="true" data-placeholder="周报标题"></div>
           <div class="week-range">
             <span class="wr-label">周期</span>
             <input type="text" id="r-start" class="date-input" placeholder="开始日期" readonly>
             <span class="wr-dash">—</span>
             <input type="text" id="r-end" class="date-input" placeholder="结束日期" readonly>
           </div>
-          <input class="i-greeting" id="r-greeting" placeholder="问候语,如 Hi Team,">
-          <input class="i-subtitle" id="r-subtitle" placeholder="副标题">
+          <div class="i-greeting rich" id="r-greeting" contenteditable="true" data-placeholder="问候语,如 Hi Team,"></div>
+          <div class="i-subtitle rich" id="r-subtitle" contenteditable="true" data-placeholder="副标题"></div>
         </header>
         <div id="sections"></div>
         <button class="add-section no-export" id="btn-add-section">+ 添加区块</button>

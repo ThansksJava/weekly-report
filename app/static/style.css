@@ -200,6 +200,49 @@ body {
 .i-greeting { font-size: 15px; font-weight: 500; margin-bottom: 2px; }
 .i-subtitle { font-size: 16.5px; font-weight: 700; margin-bottom: 10px; }
 
+/* 顶部三字段:contenteditable 富文本(多行 + 自定义样式) */
+.sheet-head .rich {
+  display: block; width: 100%;
+  background: transparent; border: none; border-bottom: 1px dashed transparent;
+  font-family: inherit; color: inherit;
+  padding: 2px 0;
+  white-space: pre-wrap; word-break: break-word; line-height: 1.45;
+}
+.sheet-head .rich:hover { border-bottom-color: var(--line); }
+.sheet-head .rich:focus { outline: none; border-bottom-color: var(--accent); }
+.sheet-head .rich:empty:before {
+  content: attr(data-placeholder); color: var(--ink-faint); pointer-events: none;
+}
+
+/* 富文本工具条 */
+.rich-toolbar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 7px 12px;
+  background: var(--ink); border-radius: 4px; box-shadow: var(--shadow);
+}
+.rich-toolbar .rt-btn {
+  min-width: 30px; height: 28px; padding: 0 8px;
+  font: 14px var(--sans); color: var(--paper);
+  background: transparent; border: 1px solid rgba(247,245,240,.25); border-radius: 3px;
+  cursor: pointer;
+}
+.rich-toolbar .rt-btn:hover { background: rgba(247,245,240,.12); border-color: var(--paper); }
+.rich-toolbar .rt-sep { width: 1px; height: 20px; background: rgba(247,245,240,.25); margin: 0 3px; }
+.rich-toolbar .rt-color {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px;
+  color: var(--paper); font: 600 14px var(--sans);
+  border: 1px solid rgba(247,245,240,.25); border-radius: 3px; cursor: pointer;
+}
+.rich-toolbar .rt-color input[type=color] {
+  width: 20px; height: 18px; padding: 0; border: none; background: none; cursor: pointer;
+}
+.rich-toolbar .rt-size {
+  height: 28px; padding: 0 6px;
+  font: 13px var(--sans); color: var(--ink); background: var(--paper);
+  border: 1px solid rgba(247,245,240,.25); border-radius: 3px; cursor: pointer;
+}
+
 /* ---------- 区块 ---------- */
 .section { margin: 26px 0 8px; }
 .section-bar { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }

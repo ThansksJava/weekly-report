@@ -413,9 +413,10 @@ document.addEventListener("keydown", (e) => {
 
 // 轻量只读渲染:遍历 sections→columns→rows
 function renderReportHTML(rep) {
-  let h = `<div class="ro-sheet"><div class="ro-title">${esc(rep.title)}</div>`;
-  if (rep.greeting) h += `<div class="ro-greeting">${esc(rep.greeting)}</div>`;
-  if (rep.subtitle) h += `<div class="ro-subtitle">${esc(rep.subtitle)}</div>`;
+  // 顶部三字段为已净化富文本,直接输出 HTML(不再 esc)
+  let h = `<div class="ro-sheet"><div class="ro-title">${rep.title || ""}</div>`;
+  if (rep.greeting) h += `<div class="ro-greeting">${rep.greeting}</div>`;
+  if (rep.subtitle) h += `<div class="ro-subtitle">${rep.subtitle}</div>`;
   for (const sec of rep.sections || []) {
     h += `<div class="ro-section-name">${esc(sec.name)}</div>`;
     h += `<div class="ro-table-scroll"><table class="ro-table"><thead><tr>`;

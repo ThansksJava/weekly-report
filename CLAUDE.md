@@ -60,7 +60,9 @@ cd trees/dev1 && .venv/bin/uvicorn app.main:app --reload --port 8001
 
 **前后端约定**:前端 [app/static/app.js](app/static/app.js) 是单文件 SPA,`current` 全局变量持有完整周报对象,所有编辑直接改它,1.5 秒防抖自动保存(整体 PUT)。`section.to_dict()` 的 JSON 结构在前后端间原样传递 —— 改 Section/Column 字段时两端都要动。认证是 httponly Cookie(`wr_session`)+ PBKDF2,所有 `/api/*`(除 register/login)经 `current_user` 依赖校验。
 
-**导出/导入**:Excel 导出在 [app/export.py](app/export.py)(openpyxl,服务端,`GET /api/reports/{id}/xlsx`);前端导出按钮在锁定状态(待审/已通过/修改待审)下**跳过 saveReport**(否则 PUT 会 409 导致导出失效),直接拉取已存内容。导入 [app/importer.py](app/importer.py) 是启发式解析:首个非空行 = 标题(正则提取日期范围),≥3 个非空单元格的行 = 表头行,其上方文本行 = 区块名,首列 "No." = 启用序号列;完整兼容本系统导出格式,对外部 Excel 是尽力解析。
+**顶部三字段富文本**:`Report.title/greeting/subtitle`(仍是 str)存的是**富文本 HTML**,前端为三个 `contenteditable` 富文本区(`#r-title/#r-greeting/#r-subtitle`,`.rich` 类),支持多行 + 加粗/斜体/下划线/字体颜色/字号/对齐(`#rich-toolbar` 工具条 + `document.execCommand` 配 `styleWithCSS`)。**安全单一入口**:[app/sanitize.py](app/sanitize.py) `sanitize_rich_text()`(标准库 `html.parser` 白名单:标签 `b/strong/i/em/u/br/p/div/span` + 内联 `color/font-size/text-align/...`,剥离 script/on*/href/img)——**所有写入路径**(`update_report`、模板增改、`create_report`、导入)都过它,渲染端(编辑器 innerHTML、只读快照 `renderSnapshotHTML`、管理端 `renderReportHTML`、邮件 `buildEmailHtml`)因此**直接输出 HTML 不再 `esc`**。改这三字段的渲染/写入时务必保持「写入必净化、渲染直出」这一约定,勿在渲染端对它们 `esc`(会显示成标签),也勿新增绕过净化的写入路径。锁定态(待审/已通过/修改待审)三字段 `contentEditable=false` 且工具条隐藏。
+
+**导出/导入**:Excel 导出在 [app/export.py](app/export.py)(openpyxl,服务端,`GET /api/reports/{id}/xlsx`);顶部三字段是富文本 HTML,导出时用 `html_to_text()`(同在 [app/sanitize.py](app/sanitize.py))降级为带换行的纯文本(`wrap_text`,丢内联样式)。前端导出按钮在锁定状态(待审/已通过/修改待审)下**跳过 saveReport**(否则 PUT 会 409 导致导出失效),直接拉取已存内容。导入 [app/importer.py](app/importer.py) 是启发式解析:首个非空行 = 标题(正则提取日期范围),≥3 个非空单元格的行 = 表头行,其上方文本行 = 区块名,首列 "No." = 启用序号列;完整兼容本系统导出格式,对外部 Excel 是尽力解析。
 
 **邮件**:`mailto:` 不支持 HTML 正文,所以方案是前端把内联样式的 HTML 表格写入剪贴板(`ClipboardItem text/html`)再打开 mailto,用户在 Outlook 粘贴。
 

@@ -23,6 +23,7 @@ from .auth import hash_password, new_token, verify_password
 from .export import report_to_xlsx
 from .importer import parse_xlsx
 from .models import Report, Section, User, new_id
+from .sanitize import sanitize_rich_text
 from .storage import DuplicateWeekError, MemoryStorage, Storage
 from .template import default_option_sets, default_templates, named_template
 
@@ -437,10 +438,18 @@ def list_templates(user: User = Depends(current_user)):
     return {"templates": user.templates, "default_template_id": user.default_template_id}
 
 
+def _sanitize_template_text(data: dict[str, Any]) -> None:
+    """就地净化模板正文中的富文本字段(标题/问候语/副标题)。"""
+    for k in ("title", "greeting", "subtitle"):
+        data[k] = sanitize_rich_text(data.get(k, ""))
+
+
 @app.post("/api/templates")
 def add_template(body: TemplateIn, user: User = Depends(current_user)):
     _ensure_templates(user)
-    tpl = named_template(body.name or "未命名模板", body.model_dump())
+    data = body.model_dump()
+    _sanitize_template_text(data)
+    tpl = named_template(body.name or "未命名模板", data)
     user.templates.append(tpl)
     store.update_user(user)
     return tpl
@@ -453,6 +462,7 @@ def save_template(tid: str, body: TemplateIn, user: User = Depends(current_user)
     if not tpl:
         raise HTTPException(status_code=404, detail="模板不存在")
     data = body.model_dump()
+    _sanitize_template_text(data)
     tpl["name"] = data["name"] or tpl["name"]
     for k in ("title", "greeting", "subtitle", "sections"):
         tpl[k] = data[k]
@@ -559,9 +569,9 @@ def create_report(
     report = Report(
         id=new_id(),
         user_id=user.id,
-        title=_fill_dates(tpl.get("title", ""), start, end),
-        greeting=tpl.get("greeting", ""),
-        subtitle=_fill_dates(tpl.get("subtitle", ""), start, end),
+        title=sanitize_rich_text(_fill_dates(tpl.get("title", ""), start, end)),
+        greeting=sanitize_rich_text(tpl.get("greeting", "")),
+        subtitle=sanitize_rich_text(_fill_dates(tpl.get("subtitle", ""), start, end)),
         week_start=start,
         week_end=end,
         sections=sections,
@@ -591,9 +601,9 @@ def update_report(report_id: str, body: ReportIn, user: User = Depends(current_u
     report = _owned_report(report_id, user)
     if report.review_status not in ("draft", "rejected"):
         raise HTTPException(status_code=409, detail="周报审核中或已通过,不能修改")
-    report.title = body.title
-    report.greeting = body.greeting
-    report.subtitle = body.subtitle
+    report.title = sanitize_rich_text(body.title)
+    report.greeting = sanitize_rich_text(body.greeting)
+    report.subtitle = sanitize_rich_text(body.subtitle)
     report.week_start = body.week_start
     report.week_end = body.week_end
     report.sections = [Section.from_dict(s) for s in body.sections]
@@ -663,6 +673,10 @@ async def import_report(file: UploadFile = File(...), user: User = Depends(curre
         report = parse_xlsx(data, user.id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"解析失败:{e}")
+    # 导入的纯文本顶部字段经净化转为安全 HTML
+    report.title = sanitize_rich_text(report.title)
+    report.greeting = sanitize_rich_text(report.greeting)
+    report.subtitle = sanitize_rich_text(report.subtitle)
     try:
         store.create_report(report)
     except DuplicateWeekError:
