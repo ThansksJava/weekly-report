@@ -579,6 +579,25 @@ document.addEventListener("selectionchange", () => {
   if (rich) { activeRichEl = rich; savedRange = sel.getRangeAt(0).cloneRange(); }
 });
 
+// fontSize 命令的 1~7 档映射到明确像素值(Outlook 不认 small/large 等关键字)
+const SIZE_PX = { "1": "11px", "2": "13px", "3": "15px", "4": "17px", "5": "20px", "6": "24px", "7": "30px" };
+
+// 把 execCommand 可能产出的 <font color/size> 归一为带内联样式的 <span>
+// —— Outlook 仅可靠识别 <span style="color/font-size">,不认 <font size> 相对值
+function normalizeFonts(root) {
+  root.querySelectorAll("font").forEach((f) => {
+    const span = document.createElement("span");
+    const color = f.getAttribute("color");
+    const size = f.getAttribute("size");
+    if (color) span.style.color = color;
+    if (size && SIZE_PX[size]) span.style.fontSize = SIZE_PX[size];
+    const inline = f.getAttribute("style");
+    if (inline) span.style.cssText += ";" + inline;
+    span.innerHTML = f.innerHTML;
+    f.replaceWith(span);
+  });
+}
+
 function execRich(cmd, value = null) {
   if (!activeRichEl) return;
   activeRichEl.focus();
@@ -587,8 +606,12 @@ function execRich(cmd, value = null) {
     sel.removeAllRanges();
     sel.addRange(savedRange);
   }
-  try { document.execCommand("styleWithCSS", false, true); } catch {}
+  // 字号/颜色用 <font> 标记再归一为 span(像素/颜色内联,粘贴到 Outlook 才生效);
+  // 其余命令(B/I/U/对齐)用 CSS 模式
+  const useFontTag = cmd === "fontSize" || cmd === "foreColor";
+  try { document.execCommand("styleWithCSS", false, !useFontTag); } catch {}
   document.execCommand(cmd, false, value);
+  if (useFontTag) normalizeFonts(activeRichEl);
   const sel = window.getSelection();
   if (sel && sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
   const pair = RICH_FIELDS.find((p) => p[0] === activeRichEl.id);
@@ -979,24 +1002,33 @@ function buildEmailHtml() {
   return html;
 }
 
+// 取富文本字段的纯文本(用于邮件主题)
+function richToPlain(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html || "";
+  return (tmp.textContent || "").replace(/\s+/g, " ").trim();
+}
+
 $("#btn-email").addEventListener("click", async () => {
   if (!current) return;
-  await saveReport();
+  if (dirty && !isLocked()) await saveReport();
   const html = buildEmailHtml();
+  const plain = richToPlain(current.title);
   try {
-    // 以 text/html 写入剪贴板,粘贴到 Outlook 时保留表格格式
+    // 以 text/html 写入剪贴板,粘贴到 Outlook 保留字号/颜色/表格格式
     await navigator.clipboard.write([
       new ClipboardItem({
         "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([current.title], { type: "text/plain" }),
+        "text/plain": new Blob([plain], { type: "text/plain" }),
       }),
     ]);
-    toast("周报已复制(带格式)。即将打开邮件,正文中 Ctrl+V 粘贴即可");
+    toast("已复制,可以直接粘贴到邮件发送");
   } catch {
-    toast("剪贴板写入失败,将仅打开邮件窗口");
+    toast("剪贴板写入失败,请重试");
+    return;
   }
-  const subject = encodeURIComponent(current.title);
-  setTimeout(() => { window.location.href = `mailto:?subject=${subject}`; }, 600);
+  // 顺带打开邮件撰写窗口(标题为主题),正文中 Ctrl+V 粘贴即可
+  setTimeout(() => { window.location.href = `mailto:?subject=${encodeURIComponent(plain)}`; }, 600);
 });
 
 /* ---------------- 列设置浮层 ---------------- */

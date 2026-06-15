@@ -23,3 +23,7 @@ __pycache__/
 
 # 并行开发 worktree
 /trees/
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json
