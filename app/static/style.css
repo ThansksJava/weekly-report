@@ -375,6 +375,34 @@ table.wr { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 .col-menu button:hover { background: var(--accent-soft); }
 .col-menu button.on { font-weight: 700; color: var(--accent); }
 
+/* ---------- 添加区块浮层 ---------- */
+.section-menu {
+  position: fixed; z-index: 60;
+  width: 248px; max-height: 80vh; overflow-y: auto;
+  background: var(--sheet);
+  border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 28px rgba(28,39,66,.18);
+  padding: 8px;
+  animation: sm-pop .12s ease both;
+}
+@keyframes sm-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.section-menu .sm-title {
+  font: 600 11.5px var(--sans); color: var(--ink-faint); letter-spacing: .06em;
+  padding: 4px 8px 8px;
+}
+.section-menu .sm-item {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  width: 100%; text-align: left;
+  padding: 9px 11px; margin-bottom: 4px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  cursor: pointer; transition: border-color .12s, background .12s;
+}
+.section-menu .sm-item:last-child { margin-bottom: 0; }
+.section-menu .sm-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+.section-menu .sm-item.preset { border-left: 3px solid var(--accent); }
+.section-menu .sm-name { font: 600 13.5px var(--sans); color: var(--ink); }
+.section-menu .sm-meta { font: 11.5px var(--sans); color: var(--ink-faint); }
+
 /* ---------- 导入按钮 ---------- */
 .btn-import {
   margin: 0 16px 14px;

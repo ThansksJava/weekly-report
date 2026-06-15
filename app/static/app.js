@@ -7,6 +7,7 @@ let me = null;          // 当前用户
 let reports = [];       // 周报列表(摘要)
 let current = null;     // 当前编辑中的周报(完整对象)
 let optionSets = {};    // 用户选项集:名称 -> 候选值
+let presetSections = []; // 固定格式区块(My Weekly Plan / OMSE),添加区块时可直接套用
 let templates = [];     // 用户的模板列表(含 id/name/title/greeting/subtitle/sections)
 let defaultTemplateId = ""; // 默认模板 id
 let dirty = false;
@@ -72,6 +73,7 @@ async function showApp() {
   $("#user-name").textContent = me.display_name || me.username;
   $("#user-avatar").textContent = (me.display_name || me.username).slice(0, 1).toUpperCase();
   optionSets = await api("/api/options");
+  presetSections = await api("/api/preset-sections").catch(() => []);
   await loadTemplates();
   initDatePickers();
 }
@@ -465,17 +467,69 @@ function rerenderSection(oldWrap, sec, si) {
   oldWrap.replaceWith(renderSection(sec, si));
 }
 
-$("#btn-add-section").addEventListener("click", () => {
-  current.sections.push({
+function blankSection() {
+  return {
     id: uid(), name: "新区块", show_index: true,
     columns: [
       { key: "c_" + uid(), label: "项目", width: 200 },
       { key: "c_" + uid(), label: "内容", width: 400 },
     ],
     rows: [{}],
-  });
+  };
+}
+
+// 套用一个区块(固定格式或空白):深拷贝并赋新 id,追加到当前周报
+function addSection(sec) {
+  const copy = JSON.parse(JSON.stringify(sec));
+  copy.id = uid();
+  current.sections.push(copy);
   setDirty(true);
   renderReport();
+  closeSectionMenu();
+}
+
+function closeSectionMenu() { $("#section-menu").classList.add("hidden"); }
+
+$("#btn-add-section").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = $("#section-menu");
+  menu.innerHTML = "";
+  const title = document.createElement("div");
+  title.className = "sm-title";
+  title.textContent = "选择要添加的区块";
+  menu.appendChild(title);
+  // 固定格式区块
+  for (const ps of presetSections) {
+    const b = document.createElement("button");
+    b.className = "sm-item preset";
+    b.innerHTML = `<span class="sm-name">${ps.name || "未命名"}</span>
+                   <span class="sm-meta">固定格式 · ${(ps.columns || []).length} 列</span>`;
+    b.addEventListener("click", () => addSection(ps));
+    menu.appendChild(b);
+  }
+  // 空白新区块
+  const blank = document.createElement("button");
+  blank.className = "sm-item";
+  blank.innerHTML = `<span class="sm-name">空白区块</span>
+                     <span class="sm-meta">从两列空表起步,自由编辑</span>`;
+  blank.addEventListener("click", () => addSection(blankSection()));
+  menu.appendChild(blank);
+
+  // 先显示以测量尺寸,再按视口夹取定位(空间不够则向上弹出)
+  menu.classList.remove("hidden");
+  const r = e.currentTarget.getBoundingClientRect();
+  const mw = menu.offsetWidth, mh = menu.offsetHeight, gap = 6, pad = 8;
+  let left = r.left + r.width / 2 - mw / 2;            // 在按钮下方居中
+  left = Math.max(pad, Math.min(left, window.innerWidth - mw - pad));
+  let top = r.bottom + gap;
+  if (top + mh > window.innerHeight - pad) top = r.top - mh - gap;  // 下方放不下→上方
+  top = Math.max(pad, top);
+  menu.style.left = left + "px";
+  menu.style.top = top + "px";
+});
+document.addEventListener("click", (e) => {
+  const menu = $("#section-menu");
+  if (!menu.contains(e.target) && e.target.id !== "btn-add-section") closeSectionMenu();
 });
 
 // 顶部富文本字段绑定(日期由 flatpickr 单独处理)
@@ -505,29 +559,48 @@ function hideRichToolbar() {
   activeRichEl = null;
 }
 function scheduleHideToolbar() {
-  // 延迟隐藏:点击工具条按钮时不应立即收起
+  // 延迟隐藏:焦点落在富文本字段或工具条(如字号下拉/取色器)上时不收起
   hideToolbarTimer = setTimeout(() => {
     const a = document.activeElement;
-    if (!a || !a.classList || !a.classList.contains("rich")) hideRichToolbar();
+    const inField = a && a.classList && a.classList.contains("rich");
+    const inToolbar = a && a.closest && a.closest("#rich-toolbar");
+    if (!inField && !inToolbar) hideRichToolbar();
   }, 200);
 }
+
+// 记录富文本字段内的选区,以便点击下拉/取色器(会移走焦点)后仍能作用于原选中文字
+let savedRange = null;
+document.addEventListener("selectionchange", () => {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  let node = sel.getRangeAt(0).commonAncestorContainer;
+  if (node.nodeType === 3) node = node.parentElement;
+  const rich = node && node.closest ? node.closest(".rich") : null;
+  if (rich) { activeRichEl = rich; savedRange = sel.getRangeAt(0).cloneRange(); }
+});
 
 function execRich(cmd, value = null) {
   if (!activeRichEl) return;
   activeRichEl.focus();
+  if (savedRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
   try { document.execCommand("styleWithCSS", false, true); } catch {}
   document.execCommand(cmd, false, value);
-  // 同步回 current
-  const id = activeRichEl.id;
-  const pair = RICH_FIELDS.find((p) => p[0] === id);
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
+  const pair = RICH_FIELDS.find((p) => p[0] === activeRichEl.id);
   if (pair && current) { current[pair[1]] = activeRichEl.innerHTML; setDirty(true); }
 }
 
 (function initRichToolbar() {
   const bar = $("#rich-toolbar");
-  // 按钮 mousedown 时阻止默认,保住编辑区选区
+  // 仅对按钮 mousedown 阻止默认以保住选区;字号下拉/取色器是原生弹出,
+  // 阻止默认会导致它们无法打开 —— 改用 savedRange 还原选区
   bar.addEventListener("mousedown", (e) => {
-    if (e.target.closest(".rt-btn, .rt-color, .rt-size")) e.preventDefault();
+    if (e.target.closest(".rt-btn")) e.preventDefault();
   });
   bar.querySelectorAll(".rt-btn").forEach((b) => {
     b.addEventListener("click", () => execRich(b.dataset.cmd));

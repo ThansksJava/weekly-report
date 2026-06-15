@@ -25,7 +25,7 @@ from .importer import parse_xlsx
 from .models import Report, Section, User, new_id
 from .sanitize import sanitize_rich_text
 from .storage import DuplicateWeekError, MemoryStorage, Storage
-from .template import default_option_sets, default_templates, named_template
+from .template import default_option_sets, default_templates, named_template, preset_sections
 
 
 def _make_storage() -> Storage:
@@ -508,6 +508,12 @@ def save_options(body: OptionSetsIn, user: User = Depends(current_user)):
     user.option_sets = {k: [v for v in vals if v.strip()] for k, vals in body.option_sets.items() if k.strip()}
     store.update_user(user)
     return user.option_sets
+
+
+@app.get("/api/preset-sections")
+def get_preset_sections(user: User = Depends(current_user)):
+    """团队固定格式区块(My Weekly Plan / OMSE),供「添加区块」时直接套用。"""
+    return preset_sections()
 
 
 # ---------- 周报 ----------
