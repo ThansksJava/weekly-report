@@ -12,7 +12,7 @@ def default_option_sets() -> dict[str, list[str]]:
         "优先级": ["High", "Medium", "Low"],
         "级别": ["L1", "L2", "L3"],
         "状态": ["Open", "In Progress", "Pending", "Closed"],
-        "进度": ["0%", "25%", "50%", "75%", "100%"],
+        "进度": [f"{i}%" for i in range(0, 101)],
     }
 
 
